@@ -1,0 +1,6 @@
+[project]
+name = "robot-learning-vla"
+version = "0.0.0"
+description = "ETH Robot Learning sandbox. lerobot is installed imperatively via `install.sh` (uv pip install), not via uv sync — dependencies array is intentionally empty."
+requires-python = ">=3.12,<3.13"
+dependencies = []
