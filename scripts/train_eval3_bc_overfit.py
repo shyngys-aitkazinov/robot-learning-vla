@@ -6,7 +6,7 @@ It proves: LeRobotDataset → resize → proprio + RGB → MSE on recorded actio
 
 Example:
   python scripts/train_eval3_bc_overfit.py \\
-    --repo-id RobotLearningVLA/taylor_swift_1 --episodes 0 --steps 2000 --device cpu --video-backend pyav
+    --repo-id RobotLearningVLA/taylor_swift_1 --episodes 0 --steps 2000 --video-backend pyav
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms.functional import resize as tv_resize
 from tqdm import tqdm
 
+from eval3_device import resolve_eval3_device
 from eval3_models import Eval3TinyBC, find_first_image_key
 
 
@@ -75,7 +76,11 @@ def main() -> None:
     ap.add_argument("--batch-size", type=int, default=16)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--image-size", type=int, default=256)
-    ap.add_argument("--device", default="cpu")
+    ap.add_argument(
+        "--device",
+        default="auto",
+        help="auto (mps on Apple Silicon when available), or cpu | mps | cuda",
+    )
     ap.add_argument("--output-dir", type=Path, default=Path("outputs/eval3_bc_overfit"))
     ap.add_argument(
         "--video-backend",
@@ -105,7 +110,7 @@ def main() -> None:
         drop_last=False,
     )
 
-    device = torch.device(args.device)
+    device = resolve_eval3_device(args.device)
     model = Eval3TinyBC(
         action_dim=action_dim,
         state_dim=state_dim,
@@ -124,6 +129,7 @@ def main() -> None:
         "state_dim": state_dim,
         "image_size": args.image_size,
         "model_class": "Eval3TinyBC",
+        "train_device": str(device),
     }
     meta_path = args.output_dir / "eval3_bc_meta.json"
     meta_path.write_text(json.dumps(meta, indent=2))

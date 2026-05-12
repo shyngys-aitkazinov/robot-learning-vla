@@ -9,6 +9,7 @@ source .venv/bin/activate
 REPO_ID="${EVAL3_REPO_ID:-RobotLearningVLA/taylor_swift_1}"
 STEPS="${EVAL3_BC_STEPS:-2000}"
 EPS="${EVAL3_EPISODES:-}" # e.g. export EVAL3_EPISODES="0" for single episode
+# Device: unset → Python --device auto (MPS on Apple Silicon). Override: EVAL3_DEVICE=cpu
 
 ARGS=(
   python scripts/train_eval3_bc_overfit.py

@@ -35,7 +35,7 @@ chmod +x scripts/run_eval3_bc_taylor_swift.sh
 EVAL3_EPISODES="0" EVAL3_BC_STEPS="1500" ./scripts/run_eval3_bc_taylor_swift.sh
 
 # Demo CLI (stdin instruction); loads mock frames from checkpoint meta.repo_id by default
-python scripts/eval3_rollout.py --policy-path outputs/eval3_bc_overfit/best.pt --mock-frame-index 0 --device cpu
+python scripts/eval3_rollout.py --policy-path outputs/eval3_bc_overfit/best.pt --mock-frame-index 0
 
 # Parameter count for bonus tracking
 python tools/count_inference_params.py --checkpoint outputs/eval3_bc_overfit/best.pt

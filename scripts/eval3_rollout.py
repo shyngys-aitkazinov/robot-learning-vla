@@ -23,6 +23,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from eval3_device import resolve_eval3_device  # noqa: E402
 from eval3_models import Eval3TinyBC  # noqa: E402
 
 
@@ -57,13 +58,18 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--duration-s", type=float, default=20.0)
     ap.add_argument("--fps", type=float, default=30.0)
-    ap.add_argument("--device", default="cpu")
+    ap.add_argument(
+        "--device",
+        default="auto",
+        help="auto (mps on Apple Silicon when available), or cpu | mps | cuda",
+    )
     ap.add_argument("--policy-path", type=Path, default=None, help="best.pt from train_eval3_bc_overfit")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--mock-dataset-repo", type=str, default="RobotLearningVLA/taylor_swift_1")
     ap.add_argument("--mock-frame-index", type=int, default=0)
     ap.add_argument("--video-backend", default="pyav", help="Passed to LeRobotDataset for mock frames")
     args = ap.parse_args()
+    device = resolve_eval3_device(args.device)
 
     if sys.stdin.isatty():
         print("Enter instruction (single line), then press Enter:", file=sys.stderr)
@@ -99,7 +105,7 @@ def main() -> None:
         )
         policy.load_state_dict(blob["model_state"])
         policy.eval()
-        policy.to(args.device)
+        policy.to(device)
 
         mock_repo = args.mock_dataset_repo or meta.get("repo_id")
         resolved_mock_repo = mock_repo
@@ -112,8 +118,8 @@ def main() -> None:
                 int(meta["image_size"]),
                 video_backend=args.video_backend,
             )
-            mock_img = mock_img.to(args.device)
-            mock_state = mock_state.to(args.device)
+            mock_img = mock_img.to(device)
+            mock_state = mock_state.to(device)
 
     interval = 1.0 / max(1e-3, args.fps)
     deadline = time.monotonic() + args.duration_s
@@ -125,6 +131,7 @@ def main() -> None:
         "fps": args.fps,
         "dry_run": args.dry_run,
         "policy_path": str(args.policy_path) if args.policy_path else None,
+        "device": str(device),
         "mock_repo": resolved_mock_repo or args.mock_dataset_repo,
     }
     log_path.write_text(json.dumps(header) + "\n", encoding="utf-8")
