@@ -204,16 +204,25 @@ Key flags:
 | `--dataset.vcodec` | `h264_videotoolbox` on macOS (Apple HW accel), `libsvtav1` / `libx264` otherwise. |
 | `--dataset.push_to_hub` | (Default `true`) automatically upload at end. Set `false` to keep local-only. |
 | `--dataset.private` | (Default `false`) set `true` to create the Hub repo as private. |
-| `--resume` | **Top-level, not under `--dataset.`** Set `true` to append to an existing dataset (after a crash or to add more episodes). The local cache at `~/.cache/huggingface/lerobot/<repo_id>/` must still exist. |
+| `--resume` | **Top-level, not under `--dataset.`** Set `true` to append to an existing dataset (after a crash or to add more episodes). |
+| `--dataset.root` | Required together with `--resume=true` in lerobot 0.5.1+. Points at a writable working directory — must be **outside** `~/.cache/huggingface/lerobot/`, which lerobot now treats as a read-only Hub snapshot cache. |
 
 To recover from a mid-session crash and add the remaining episodes:
 
 ```bash
+# 1. Seed a writable working dir with the existing cached episodes.
+mkdir -p ./datasets
+cp -r ~/.cache/huggingface/lerobot/<org>/<name> ./datasets/<name>
+
+# 2. Resume there.
 lerobot-record ... \
     --resume=true \
     --dataset.repo_id=<org>/<name> \
+    --dataset.root=./datasets/<name> \
     --dataset.num_episodes=<N more episodes>
 ```
+
+The final push-to-Hub still happens automatically at session end; the Hub dataset will have all original + new episodes.
 
 Keyboard shortcuts while recording:
 
