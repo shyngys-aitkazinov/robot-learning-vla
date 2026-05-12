@@ -1,5 +1,7 @@
 # ETH Robot Learning Sandbox
 
+This repository is the **shared team project root** for Robot Learning / VLA work (GitHub: course code, configs, scripts). Day-to-day IDE workspace should be **this folder**, not a separate LeRobot fork — see [docs/WORKSPACE.md](docs/WORKSPACE.md) for how that relates to a local `LeRobot/` clone and how to avoid duplicated effort.
+
 A `uv`-managed Python environment for working with the
 [huggingface/lerobot](https://github.com/huggingface/lerobot) library against
 SO-100 / SO-101 hardware. Installs `lerobot` from PyPI into a local `.venv/`
