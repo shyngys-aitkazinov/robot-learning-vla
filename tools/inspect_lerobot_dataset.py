@@ -36,6 +36,11 @@ def main() -> None:
         default="pyav",
         help="Video decoder for frames (use pyav on macOS if torchcodec/FFmpeg fails)",
     )
+    parser.add_argument(
+        "--eval3-task-prefix",
+        default="Place the coke on",
+        help="If set non-empty, warn when unique task strings do not start with this prefix (Eval 3 QA)",
+    )
     args = parser.parse_args()
 
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
@@ -81,6 +86,19 @@ def main() -> None:
                 print(f"  {v:5d}  {k!r}")
             if len(counts) > 20:
                 print(f"  ... ({len(counts)} unique)")
+            if args.eval3_task_prefix:
+                bad = [t for t in counts if not str(t).startswith(args.eval3_task_prefix)]
+                if bad:
+                    print(
+                        f"\n  WARNING Eval 3: {len(bad)} task string(s) do not start "
+                        f"with {args.eval3_task_prefix!r}"
+                    )
+                    for t in bad[:10]:
+                        print(f"      {t!r}")
+                    if len(bad) > 10:
+                        print("      ...")
+                elif counts:
+                    print(f"\n  OK: All sampled tasks start with {args.eval3_task_prefix!r}")
         else:
             print("  (no 'task' column in hf_dataset)")
     except Exception as e:

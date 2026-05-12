@@ -18,6 +18,7 @@ This folder implements the **foundation plan** (scene, data regimes, recording Q
 | [oss_baselines.md](oss_baselines.md) | FlowerVLA / SmolVLA / Smol-0-VLA / TinyVLA spike guide |
 | [train_regimes.md](train_regimes.md) | Phased training A→B→C + confusion auditing |
 | [rollout.md](rollout.md) | Demo-day CLI contract + robot wiring notes |
+| [task3_deploy_readiness.md](task3_deploy_readiness.md) | **Pre-flight checklist**, SmolVLA **`front`→`camera1`** workaround, rubric + hardware |
 
 ## Repo scripts / tools
 
@@ -39,6 +40,27 @@ python scripts/eval3_rollout.py --policy-path outputs/eval3_bc_overfit/best.pt -
 
 # Parameter count for bonus tracking
 python tools/count_inference_params.py --checkpoint outputs/eval3_bc_overfit/best.pt
+
+# SmolVLA / single-camera compatibility (prints rename_map + empty_cameras suggestion)
+python tools/eval3_smolvla_compat.py
+
+# Inspect tasks vs Eval 3 prompt prefix
+python tools/inspect_lerobot_dataset.py --eval3-task-prefix "Place the coke on"
+
+# SmolVLA fine-tune wrapper (rename_map + empty_cameras for observation.images.front)
+chmod +x scripts/run_eval3_smolvla_train.sh
+EVAL3_TRAIN_STEPS=50000 ./scripts/run_eval3_smolvla_train.sh
+
+# Or invoke Python entry directly (same shim as lerobot-train):
+# uv pip install transformers accelerate sentencepiece
+python scripts/train_eval3_smolvla.py ...
+
+# Closed-loop deploy — use same rename_map as training (see task3_deploy_readiness.md)
+python scripts/eval3_vla_deploy.py --robot.type=so101_follower ... \
+  --rename_map '{"observation.images.front":"observation.images.camera1"}' \
+  --policy.path=outputs/train/eval3_smolvla/checkpoints/<STEP>/pretrained_model \
+  --dataset_repo_id=RobotLearningVLA/taylor_swift_1 \
+  --task='Place the coke on Taylor Swift' --episode_time_s=20
 ```
 
-Wire `--policy-path` to your real VLA checkpoint when ready; the BC script produces a **sanity** checkpoint shape only (not a compliant VLA by itself).
+Wire **`eval3_rollout`** / BC checkpoints only for **pipeline sanity**. Real Eval 3 uses **SmolVLA** weights + **`eval3_vla_deploy`** on the arm.

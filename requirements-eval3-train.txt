@@ -1,8 +1,13 @@
-# Optional: install ONLY on Linux GPU training machines (e.g. Brev), not required for
-# lerobot-record / replay / scripts/train_eval3_bc_overfit.py on macOS.
+# Optional extras for SmolVLA fine-tuning on macOS or GPU/Linux.
 #
-# SmolVLA fine-tuning pulls in transformers; mixing versions can break lerobot imports.
-# Prefer a dedicated venv or HF Lerobot Docker image — see docs/eval3/smolvla_linux_training.md.
+# Install into the same venv ONLY when training/deploying SmolVLA; enter via:
+#   python scripts/train_eval3_smolvla.py ...
+#   python scripts/eval3_vla_deploy.py ...
+# which apply `scripts/eval3_lerobot_shim.py` before `lerobot.policies` imports.
 #
-# Example (adjust pins to match HF Lerobot docs for your release):
-#   uv pip install -r requirements-eval3-train.txt
+#   uv pip install transformers accelerate sentencepiece
+#
+# Or bootstrap flag:
+#   EVAL3_INSTALL_SMOLVLA_DEPS=1 ./install.sh
+#
+# Isolated GPU training env remains optional — docs/eval3/smolvla_linux_training.md.
