@@ -60,7 +60,7 @@ def main() -> None:
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--policy-path", type=Path, default=None, help="best.pt from train_eval3_bc_overfit")
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--mock-dataset-repo", type=str, default=None)
+    ap.add_argument("--mock-dataset-repo", type=str, default="RobotLearningVLA/taylor_swift_1")
     ap.add_argument("--mock-frame-index", type=int, default=0)
     ap.add_argument("--video-backend", default="pyav", help="Passed to LeRobotDataset for mock frames")
     args = ap.parse_args()
@@ -85,6 +85,7 @@ def main() -> None:
     policy = None
     meta: dict = {}
     mock_img = mock_state = None
+    resolved_mock_repo: str | None = None
 
     if args.policy_path and args.policy_path.is_file() and not args.dry_run:
         blob = torch.load(args.policy_path, map_location="cpu", weights_only=False)
@@ -100,9 +101,11 @@ def main() -> None:
         policy.eval()
         policy.to(args.device)
 
-        if args.mock_dataset_repo:
+        mock_repo = args.mock_dataset_repo or meta.get("repo_id")
+        resolved_mock_repo = mock_repo
+        if mock_repo:
             mock_img, mock_state = load_mock_frame(
-                args.mock_dataset_repo,
+                mock_repo,
                 args.mock_frame_index,
                 meta["image_key"],
                 meta.get("state_key"),
@@ -122,7 +125,7 @@ def main() -> None:
         "fps": args.fps,
         "dry_run": args.dry_run,
         "policy_path": str(args.policy_path) if args.policy_path else None,
-        "mock_repo": args.mock_dataset_repo,
+        "mock_repo": resolved_mock_repo or args.mock_dataset_repo,
     }
     log_path.write_text(json.dumps(header) + "\n", encoding="utf-8")
 

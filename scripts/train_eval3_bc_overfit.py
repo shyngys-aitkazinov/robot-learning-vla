@@ -65,7 +65,11 @@ def collate(batch):
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--repo-id", required=True)
+    ap.add_argument(
+        "--repo-id",
+        default="RobotLearningVLA/taylor_swift_1",
+        help="HF dataset repo id (team default: taylor_swift_1)",
+    )
     ap.add_argument("--episodes", nargs="*", type=int, default=None)
     ap.add_argument("--steps", type=int, default=1500)
     ap.add_argument("--batch-size", type=int, default=16)

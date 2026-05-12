@@ -17,7 +17,11 @@ import torch
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Inspect LeRobotDataset metadata and sample tensors.")
-    parser.add_argument("--repo-id", required=True, help="HF dataset repo id, e.g. RobotLearningVLA/taylor_swift_1")
+    parser.add_argument(
+        "--repo-id",
+        default="RobotLearningVLA/taylor_swift_1",
+        help="HF dataset repo id",
+    )
     parser.add_argument(
         "--episodes",
         nargs="*",
