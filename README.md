@@ -7,6 +7,10 @@ A `uv`-managed Python environment for working with the
 SO-100 / SO-101 hardware. Installs `lerobot` from PyPI into a local `.venv/`
 via `uv pip install`. Works on macOS / Apple Silicon (no CUDA) and Linux.
 
+## Eval 3 (VLA coke-on-celebrity print)
+
+Foundation docs, recording pilots, dataset matrix, compute checklist, and tooling live under **[docs/eval3/](docs/eval3/README.md)** (inspect Hub datasets, BC overfit sanity script, timed rollout CLI skeleton).
+
 ## Quickstart
 
 ```bash
