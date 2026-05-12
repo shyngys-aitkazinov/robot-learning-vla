@@ -204,6 +204,16 @@ Key flags:
 | `--dataset.vcodec` | `h264_videotoolbox` on macOS (Apple HW accel), `libsvtav1` / `libx264` otherwise. |
 | `--dataset.push_to_hub` | (Default `true`) automatically upload at end. Set `false` to keep local-only. |
 | `--dataset.private` | (Default `false`) set `true` to create the Hub repo as private. |
+| `--resume` | **Top-level, not under `--dataset.`** Set `true` to append to an existing dataset (after a crash or to add more episodes). The local cache at `~/.cache/huggingface/lerobot/<repo_id>/` must still exist. |
+
+To recover from a mid-session crash and add the remaining episodes:
+
+```bash
+lerobot-record ... \
+    --resume=true \
+    --dataset.repo_id=<org>/<name> \
+    --dataset.num_episodes=<N more episodes>
+```
 
 Keyboard shortcuts while recording:
 
