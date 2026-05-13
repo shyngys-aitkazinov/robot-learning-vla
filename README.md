@@ -195,7 +195,7 @@ Key flags:
 
 | Flag | Meaning |
 |---|---|
-| `--dataset.repo_id` | Target `<org-or-user>/<name>` on the Hugging Face Hub. Use your org slug (e.g. `RobotLearningVLA`) to push under the org. |
+| `--dataset.repo_id` | Target `<org-or-user>/<name>` on the Hugging Face Hub. Use your org slug (e.g. `RobotLearningVLA`) to push under the org. **When a `--policy` is set (eval rollouts), the `<name>` must start with `eval_`** — lerobot raises `ValueError` otherwise. |
 | `--dataset.num_episodes` | Number of episodes to record in this session. |
 | `--dataset.single_task` | Language label attached to every frame (used by VLA policies). |
 | `--dataset.episode_time_s` | (Default 60) max seconds per episode. `→` ends early. |
