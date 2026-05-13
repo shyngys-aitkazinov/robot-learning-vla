@@ -239,6 +239,37 @@ def apply_concat_patch() -> None:
                     for stats_type, stats in IMAGENET_STATS.items():
                         d.meta.stats[key][stats_type] = torch.tensor(stats, dtype=torch.float32)
 
+        # Layer 1+2: per-dataset Eval3 prep (episode truncation + task-string augmentation).
+        # Both are env-var-driven so we can ablate independently:
+        #   EVAL3_MAX_FRAMES_PER_EP=600    # cap each episode at first 600 frames (= 20s @ 30fps)
+        #                                  # Set to "0" or a huge number to disable truncation.
+        #   EVAL3_TASK_AUG=1               # enable task-string augmentation (default on)
+        try:
+            from eval3_dataset_prep import Eval3PrepDataset, make_task_augmenter
+        except ImportError as e:
+            logging.warning("eval3_concat_patch: could not import eval3_dataset_prep (%s); "
+                            "skipping Layer 1+2 prep.", e)
+        else:
+            max_frames_raw = os.environ.get("EVAL3_MAX_FRAMES_PER_EP", "600").strip()
+            try:
+                max_frames = int(max_frames_raw)
+            except ValueError:
+                max_frames = 600
+            if max_frames <= 0:
+                max_frames = None  # disabled
+            task_aug = make_task_augmenter() if os.environ.get("EVAL3_TASK_AUG", "1") == "1" else None
+            prep_datasets = []
+            for d in datasets:
+                w = Eval3PrepDataset(d, max_frames_per_episode=max_frames, task_aug_fn=task_aug)
+                s = w.truncation_summary()
+                logging.info(
+                    "eval3_concat_patch: %s  before=%d  after=%d  kept=%.1f%%  task_aug=%s",
+                    s["repo_id"], s["original_num_frames"], s["kept_num_frames"],
+                    s["kept_fraction"] * 100.0, task_aug is not None,
+                )
+                prep_datasets.append(w)
+            datasets = prep_datasets
+
         concat = ConcatLeRobotDataset(datasets)
         logging.info(
             "eval3_concat_patch: combined %d datasets -> %d frames / %d episodes",
