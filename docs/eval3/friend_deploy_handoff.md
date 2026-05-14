@@ -1,8 +1,20 @@
 # Eval 3 — Friend deploy handoff (SmolVLA 50k 3-celebrity model on SO-101)
 
-This document is a self-contained recipe for taking the **`RobotLearningVLA/eval3-smolvla-3way-50k-aug-v1`** checkpoint and running it on an SO-101 follower arm. Follow it top to bottom on the machine that has the robot plugged in. The whole thing is one-time setup + one command to run a rollout.
+This document is a self-contained recipe for taking the **`RobotLearningVLA/eval3-smolvla-3way-50k-v3-fresh`** checkpoint and running it on an SO-101 follower arm. Follow it top to bottom on the machine that has the robot plugged in. The whole thing is one-time setup + one command to run a rollout.
 
-The model was fine-tuned from `lerobot/smolvla_base` on 58 episodes / 33 892 frames across `taylor_swift_1`, `yann_lecun_1`, and `barack_obama_1` with image+task augmentation. Architecture is SmolVLA (≈450 M params, ≈907 MB on disk).
+The model was fine-tuned from `lerobot/smolvla_base` on 44 filtered episodes / 25 553 frames across `taylor_swift_1`, `yann_lecun_1`, and `barack_obama_1` with the full v3 augmentation stack: 10 torchvision image transforms + background replacement (p=0.3) + target-preserving print-position shuffle (p=0.5) + task-string augmentation. 14/58 source episodes were dropped: Swift 6 bad-recording episodes + LeCun/Obama 8 negative-mode wrist_roll episodes (operator inconsistency, both modes physically valid but only one mode kept for clean supervision). Architecture is SmolVLA (≈450 M params, ≈907 MB on disk).
+
+### Behavior changes vs the previous `eval3-smolvla-3way-50k-aug-v1` checkpoint
+
+The previous v1 model collapsed all three prompts to Swift's wrist_roll (≈ −80°) regardless of which celebrity was named. v3 has been retrained from scratch with augmentation that breaks this scene-prompt shortcut. Expected per-prompt `wrist_roll` (action index 4) final-1s behavior:
+
+| prompt | v1 (broken) wrist_roll | v3 (new) expected wrist_roll |
+|---|---|---|
+| Place the coke on Taylor Swift | −80° to −85° (correct) | similar (−80° to −85°) |
+| Place the coke on Yann LeCun | −85° (WRONG, collapsed to Swift) | **+85° to +100°** (180° rotation — gripper visibly flips) |
+| Place the coke on Barack Obama | −82° to −92° (WRONG, collapsed to Swift) | **+80° to +95°** (170° rotation) |
+
+So the most visible difference will be that **the gripper orientation is now distinct between Swift and LeCun/Obama rollouts**. After running the 3 prompts, dump the recorded JSONLs and check the final-1s wrist_roll to confirm.
 
 ---
 
@@ -146,7 +158,7 @@ python scripts/eval3_vla_deploy.py \
   --robot.cameras='{front: {type: opencv, index_or_path: <cam_idx>, width: 640, height: 480, fps: 30}}' \
   --dataset_repo_id=RobotLearningVLA/taylor_swift_1 \
   --rename_map='{"observation.images.front":"observation.images.camera1"}' \
-  --policy.path=RobotLearningVLA/eval3-smolvla-3way-50k-aug-v1 \
+  --policy.path=RobotLearningVLA/eval3-smolvla-3way-50k-v3-fresh \
   --policy.device=mps \
   --policy.n_action_steps=25 \
   --interpolation_multiplier=2 \
@@ -227,7 +239,7 @@ python scripts/eval3_vla_deploy.py \
   --robot.cameras='{front: {type: opencv, index_or_path: <cam_idx>, width: 640, height: 480, fps: 30}}' \
   --dataset_repo_id=RobotLearningVLA/taylor_swift_1 \
   --rename_map='{"observation.images.front":"observation.images.camera1"}' \
-  --policy.path=RobotLearningVLA/eval3-smolvla-3way-50k-aug-v1 \
+  --policy.path=RobotLearningVLA/eval3-smolvla-3way-50k-v3-fresh \
   --policy.device=mps \
   --policy.n_action_steps=25 \
   --interpolation_multiplier=2 \
@@ -239,7 +251,7 @@ Type the prompt at the stderr prompt, hit Enter, watch the arm. Send back the JS
 
 ## 8. Why these flags?
 
-- `--policy.path=RobotLearningVLA/eval3-smolvla-3way-50k-aug-v1` — the SmolVLA fine-tune trained on Swift+LeCun+Obama with image+task augmentation; pulled from private HF repo.
+- `--policy.path=RobotLearningVLA/eval3-smolvla-3way-50k-v3-fresh` — the SmolVLA fine-tune trained on Swift+LeCun+Obama with image+task augmentation; pulled from private HF repo.
 - `--rename_map='{"observation.images.front":"observation.images.camera1"}'` — the dataset has one camera (`front`); SmolVLA was trained expecting `camera1`. This rename + the 2 empty cameras (config.empty_cameras=2) tells the policy "you only have one real camera, pad the other two".
 - `--policy.n_action_steps=25` — halves SmolVLA's default 50-action chunk size so the policy re-infers twice as often. Reduces lag at chunk boundaries; smoother motion on real hardware. Doesn't change the model.
 - `--interpolation_multiplier=2` — at deploy time, inserts an interpolated waypoint between every model-emitted action, doubling the effective control rate and smoothing high-jerk transitions (especially helpful for Swift's `wrist_roll`).
