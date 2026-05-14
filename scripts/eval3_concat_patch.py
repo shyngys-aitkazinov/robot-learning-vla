@@ -239,16 +239,26 @@ def apply_concat_patch() -> None:
                     for stats_type, stats in IMAGENET_STATS.items():
                         d.meta.stats[key][stats_type] = torch.tensor(stats, dtype=torch.float32)
 
-        # Layer 1+2: per-dataset Eval3 prep (episode truncation + task-string augmentation).
-        # Both are env-var-driven so we can ablate independently:
+        # Per-dataset Eval3 prep wrappers. Env-var-driven so we can ablate:
         #   EVAL3_MAX_FRAMES_PER_EP=600    # cap each episode at first 600 frames (= 20s @ 30fps)
-        #                                  # Set to "0" or a huge number to disable truncation.
         #   EVAL3_TASK_AUG=1               # enable task-string augmentation (default on)
+        #   EVAL3_BG_REPLACE=1             # enable background replacement (default on)
+        #   EVAL3_BG_REPLACE_P=0.3         # per-frame probability
+        #   EVAL3_PRINT_SHUFFLE=1          # enable non-target print-position shuffle
+        #   EVAL3_PRINT_SHUFFLE_P=0.5
+        #   EVAL3_MASK_DIR=outputs/eval3_masks
+        #   EVAL3_BG_DIR=outputs/eval3_backgrounds
+        #   EVAL3_SWIFT_EPISODE_FILTER=0,4,7,8,9,10,11,12,14,15,16,17,18,19
         try:
-            from eval3_dataset_prep import Eval3PrepDataset, make_task_augmenter
+            from eval3_dataset_prep import (
+                Eval3PrepDataset,
+                BackgroundReplaceAugmenter,
+                PrintShuffleAugmenter,
+                make_task_augmenter,
+            )
         except ImportError as e:
             logging.warning("eval3_concat_patch: could not import eval3_dataset_prep (%s); "
-                            "skipping Layer 1+2 prep.", e)
+                            "skipping Eval3 prep.", e)
         else:
             max_frames_raw = os.environ.get("EVAL3_MAX_FRAMES_PER_EP", "600").strip()
             try:
@@ -257,15 +267,75 @@ def apply_concat_patch() -> None:
                 max_frames = 600
             if max_frames <= 0:
                 max_frames = None  # disabled
+
             task_aug = make_task_augmenter() if os.environ.get("EVAL3_TASK_AUG", "1") == "1" else None
+            bg_replace_enabled = os.environ.get("EVAL3_BG_REPLACE", "1") == "1"
+            print_shuffle_enabled = os.environ.get("EVAL3_PRINT_SHUFFLE", "1") == "1"
+            try:
+                bg_p = float(os.environ.get("EVAL3_BG_REPLACE_P", "0.3"))
+            except ValueError:
+                bg_p = 0.3
+            try:
+                ps_p = float(os.environ.get("EVAL3_PRINT_SHUFFLE_P", "0.5"))
+            except ValueError:
+                ps_p = 0.5
+            mask_dir = os.environ.get("EVAL3_MASK_DIR", "outputs/eval3_masks")
+            bg_dir = os.environ.get("EVAL3_BG_DIR", "outputs/eval3_backgrounds")
+            def _parse_filter(env_var: str) -> list[int] | None:
+                raw = os.environ.get(env_var, "").strip()
+                if not raw:
+                    return None
+                return [int(x) for x in raw.split(",") if x.strip()]
+
+            swift_filter = _parse_filter("EVAL3_SWIFT_EPISODE_FILTER")
+            lecun_filter = _parse_filter("EVAL3_LECUN_EPISODE_FILTER")
+            obama_filter = _parse_filter("EVAL3_OBAMA_EPISODE_FILTER")
+
+            def _slug_from_repo(repo: str) -> str:
+                rl = repo.lower()
+                if "taylor_swift" in rl:
+                    return "swift"
+                if "yann_lecun" in rl:
+                    return "lecun"
+                if "barack_obama" in rl:
+                    return "obama"
+                return ""
+
             prep_datasets = []
             for d in datasets:
-                w = Eval3PrepDataset(d, max_frames_per_episode=max_frames, task_aug_fn=task_aug)
+                slug = _slug_from_repo(d.repo_id)
+                bg_aug = None
+                print_aug = None
+                if slug and bg_replace_enabled:
+                    bg_mask_path = os.path.join(mask_dir, slug, "bg_mask.npy")
+                    if os.path.exists(bg_mask_path) and os.path.isdir(bg_dir):
+                        bg_aug = BackgroundReplaceAugmenter(bg_mask_path, bg_dir, p=bg_p, seed=hash(slug) & 0xFFFF)
+                    else:
+                        logging.warning("eval3_concat_patch: %s bg-aug skipped (missing mask or bg dir)", slug)
+                if slug and print_shuffle_enabled:
+                    o1 = os.path.join(mask_dir, slug, "other1_mask.npy")
+                    o2 = os.path.join(mask_dir, slug, "other2_mask.npy")
+                    if os.path.exists(o1) and os.path.exists(o2):
+                        print_aug = PrintShuffleAugmenter(o1, o2, p=ps_p, seed=(hash(slug) >> 16) & 0xFFFF)
+                    else:
+                        logging.warning("eval3_concat_patch: %s print-shuffle skipped (missing masks)", slug)
+
+                ep_filter = {"swift": swift_filter, "lecun": lecun_filter, "obama": obama_filter}.get(slug)
+                w = Eval3PrepDataset(
+                    d,
+                    max_frames_per_episode=max_frames,
+                    task_aug_fn=task_aug,
+                    bg_aug_fn=bg_aug,
+                    print_aug_fn=print_aug,
+                    episode_filter=ep_filter,
+                )
                 s = w.truncation_summary()
                 logging.info(
-                    "eval3_concat_patch: %s  before=%d  after=%d  kept=%.1f%%  task_aug=%s",
+                    "eval3_concat_patch: %s  before=%d  after=%d  kept=%.1f%%  "
+                    "task_aug=%s  bg_aug=%s  print_aug=%s  ep_filter=%s",
                     s["repo_id"], s["original_num_frames"], s["kept_num_frames"],
                     s["kept_fraction"] * 100.0, task_aug is not None,
+                    bg_aug is not None, print_aug is not None, ep_filter,
                 )
                 prep_datasets.append(w)
             datasets = prep_datasets
