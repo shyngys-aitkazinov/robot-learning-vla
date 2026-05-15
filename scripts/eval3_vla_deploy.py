@@ -73,6 +73,80 @@ from lerobot.processor import (  # noqa: E402
 )
 
 
+def _to_float_list(value) -> list[float] | None:
+    if value is None:
+        return None
+    try:
+        if isinstance(value, torch.Tensor):
+            arr = value.detach().cpu().flatten().tolist()
+        else:
+            import numpy as _np
+
+            arr = _np.asarray(value).reshape(-1).tolist()
+        return [float(x) for x in arr]
+    except Exception:
+        return None
+
+
+def _float_mapping(mapping: dict | None) -> dict[str, float] | None:
+    if mapping is None:
+        return None
+    out = {}
+    for key in sorted(mapping):
+        try:
+            out[key] = float(mapping[key])
+        except Exception:
+            pass
+    return out
+
+
+def _pretrained_file(policy_path: str, filename: str) -> str | None:
+    local = Path(policy_path)
+    if local.exists():
+        candidate = local / filename
+        return str(candidate) if candidate.is_file() else None
+    try:
+        from huggingface_hub import hf_hub_download
+
+        return hf_hub_download(policy_path, filename)
+    except Exception as exc:
+        logging.warning("Could not resolve %s from %s: %s", filename, policy_path, exc)
+        return None
+
+
+def _policy_sha(policy_path: str) -> str | None:
+    if Path(policy_path).exists():
+        return None
+    try:
+        from huggingface_hub import HfApi
+
+        return HfApi().model_info(policy_path).sha
+    except Exception as exc:
+        logging.warning("Could not resolve model sha for %s: %s", policy_path, exc)
+        return None
+
+
+def _checkpoint_stats_counts(policy_path: str) -> dict[str, float | None]:
+    path = _pretrained_file(policy_path, "policy_preprocessor_step_5_normalizer_processor.safetensors")
+    if not path:
+        return {"action": None, "observation.state": None}
+    try:
+        from safetensors.torch import load_file
+
+        tensors = load_file(path)
+        return {
+            "action": float(tensors["action.count"].flatten()[0]) if "action.count" in tensors else None,
+            "observation.state": (
+                float(tensors["observation.state.count"].flatten()[0])
+                if "observation.state.count" in tensors
+                else None
+            ),
+        }
+    except Exception as exc:
+        logging.warning("Could not read checkpoint stats counts from %s: %s", path, exc)
+        return {"action": None, "observation.state": None}
+
+
 @dataclass
 class Eval3VLADeployConfig:
     robot: RobotConfig
@@ -183,6 +257,8 @@ def _deploy_loop(
 
             observation_frame = build_dataset_frame(ds_features, obs_processed, prefix=OBS_STR)
             is_record_frame = True
+            policy_action_raw = None
+            policy_action_processed = None
 
             if use_interpolation:
                 ran_inference = False
@@ -199,6 +275,8 @@ def _deploy_loop(
                     )
                     act_processed_policy = make_robot_action(action_values, ds_features)
                     robot_action_to_send = robot_action_processor((act_processed_policy, obs))
+                    policy_action_raw = _to_float_list(action_values)
+                    policy_action_processed = _float_mapping(robot_action_to_send)
                     action_tensor = torch.tensor([robot_action_to_send[k] for k in action_keys])
                     interpolator.add(action_tensor)
                     ran_inference = True
@@ -222,24 +300,12 @@ def _deploy_loop(
                 )
                 act_processed_policy = make_robot_action(action_values, ds_features)
                 robot_action_to_send = robot_action_processor((act_processed_policy, obs))
+                policy_action_raw = _to_float_list(action_values)
+                policy_action_processed = _float_mapping(robot_action_to_send)
                 action_values = robot_action_to_send
 
             robot.send_action(robot_action_to_send)
 
-            if log_file is not None:
-                action_keys_out = sorted(robot_action_to_send)
-                log_file.write(
-                    json.dumps(
-                        {
-                            "step": step_idx,
-                            "t_monotonic": time.perf_counter(),
-                            "t_episode_s": time.perf_counter() - start_episode_t,
-                            "joint_keys": action_keys_out,
-                            "action": [float(robot_action_to_send[k]) for k in action_keys_out],
-                        }
-                    )
-                    + "\n"
-                )
             step_idx += 1
 
             if display_data:
@@ -251,6 +317,30 @@ def _deploy_loop(
 
             dt_s = time.perf_counter() - start_loop_t
             sleep_time_s = control_interval - dt_s
+            if log_file is not None:
+                action_keys_out = sorted(robot_action_to_send)
+                log_file.write(
+                    json.dumps(
+                        {
+                            "step": step_idx - 1,
+                            "t_monotonic": time.perf_counter(),
+                            "t_episode_s": time.perf_counter() - start_episode_t,
+                            "dt_s": float(dt_s),
+                            "loop_hz": float(1.0 / dt_s) if dt_s > 0 else None,
+                            "target_fps": float(fps),
+                            "sleep_s": float(max(sleep_time_s, 0.0)),
+                            "ran_policy_inference": bool(is_record_frame),
+                            "state": _to_float_list(observation_frame.get("observation.state")),
+                            "joint_keys": action_keys_out,
+                            "policy_action_raw": policy_action_raw,
+                            "policy_action_processed": policy_action_processed,
+                            "sent_action": _float_mapping(robot_action_to_send),
+                            # Backward-compatible field consumed by older audit helpers.
+                            "action": [float(robot_action_to_send[k]) for k in action_keys_out],
+                        }
+                    )
+                    + "\n"
+                )
             if sleep_time_s < 0:
                 logging.warning(
                     "Loop slower than target FPS — inference or cameras may be overloaded "
@@ -312,16 +402,21 @@ def eval3_vla_deploy(cfg: Eval3VLADeployConfig) -> None:
     if cfg.rollout_log_dir:
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         rollout_log_path = Path(cfg.rollout_log_dir) / f"rollout_{ts}.jsonl"
+        first_frame_path = rollout_log_path.with_suffix(".firstframe.png")
+        stats_counts = _checkpoint_stats_counts(str(cfg.policy.pretrained_path))
         rollout_header = {
             "instruction": cfg.task,
             "episode_time_s": cfg.episode_time_s,
             "fps": cfg.fps,
             "policy_path": str(cfg.policy.pretrained_path),
+            "policy_sha": _policy_sha(str(cfg.policy.pretrained_path)),
+            "checkpoint_stats_count": stats_counts,
             "dataset_repo_id": cfg.dataset_repo_id,
             "rename_map": cfg.rename_map,
             "robot_type": getattr(cfg.robot, "type", None),
             "robot_id": getattr(cfg.robot, "id", None),
             "policy_device": str(cfg.policy.device),
+            "first_frame_path": str(first_frame_path),
         }
         logging.info("Rollout log will be written to %s", rollout_log_path)
 

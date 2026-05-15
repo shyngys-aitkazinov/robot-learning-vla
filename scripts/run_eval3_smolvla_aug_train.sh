@@ -3,10 +3,10 @@
 #   * Layer 1 (preprocessing): per-episode frame truncation to 600 frames (= 20s @ 30fps)
 #     so the model only trains on 20s-budget-fittable trajectories. Driven by
 #     env var EVAL3_MAX_FRAMES_PER_EP (default 600). 17/18 Obama episodes exceed 20s.
-#   * Layer 2 (preprocessing): random task-string augmentation at load time.
+#   * Layer 2 (preprocessing): strict task-string augmentation at load time.
 #     Driven by EVAL3_TASK_AUG (default 1). The recordings carry "Place the coke on
 #     the <X>" but demo prompts will be "Place the coke on <X>". This layer mixes
-#     6 prompt variants weighted 40% canonical demo wording.
+#     80% canonical demo wording with 20% original recorded wording by default.
 #   * Layer 3 (augmentation): torchvision image transforms — brightness/contrast/
 #     saturation/hue/sharpness/affine. Brightness + contrast are weighted 2x because
 #     they're the strongest defence against the LeCun↔Obama spurious lighting cue
@@ -19,7 +19,6 @@
 #   ./scripts/run_eval3_smolvla_aug_train.sh
 #   EVAL3_TRAIN_STEPS=200 EVAL3_BATCH=1 ./scripts/run_eval3_smolvla_aug_train.sh   # MPS smoke
 #   EVAL3_POLICY_DEVICE=cuda EVAL3_TRAIN_STEPS=50000 EVAL3_BATCH=8 \
-#     EVAL3_EXTRA_REPOS=RobotLearningVLA/yann_lecun_1,RobotLearningVLA/barack_obama_1 \
 #     ./scripts/run_eval3_smolvla_aug_train.sh                                     # Brev
 
 set -euo pipefail
@@ -29,8 +28,8 @@ cd "$ROOT"
 source .venv/bin/activate
 
 REPO="${EVAL3_DATASET_REPO:-RobotLearningVLA/taylor_swift_1}"
-OUT="${EVAL3_TRAIN_OUT:-outputs/train/eval3_3way_50k_v3_fresh}"
-JOB="${EVAL3_JOB_NAME:-eval3_3way_50k_v3_fresh}"
+OUT="${EVAL3_TRAIN_OUT:-outputs/train/eval3_3way_50k_v4_filtered_stats}"
+JOB="${EVAL3_JOB_NAME:-eval3_3way_50k_v4_filtered_stats}"
 STEPS="${EVAL3_TRAIN_STEPS:-50000}"
 BATCH="${EVAL3_BATCH:-8}"
 DEVICE="${EVAL3_POLICY_DEVICE:-mps}"
@@ -54,9 +53,10 @@ SAVE_FREQ="${EVAL3_SAVE_FREQ:-10000}"
 # Layers 1-4 prep are on by default; surface knobs for ablation runs.
 export EVAL3_MAX_FRAMES_PER_EP="${EVAL3_MAX_FRAMES_PER_EP:-600}"
 export EVAL3_TASK_AUG="${EVAL3_TASK_AUG:-1}"
+export EVAL3_TASK_AUG_CANONICAL_P="${EVAL3_TASK_AUG_CANONICAL_P:-0.8}"
 export EVAL3_BG_REPLACE="${EVAL3_BG_REPLACE:-1}"
 export EVAL3_BG_REPLACE_P="${EVAL3_BG_REPLACE_P:-0.3}"
-export EVAL3_PRINT_SHUFFLE="${EVAL3_PRINT_SHUFFLE:-1}"
+export EVAL3_PRINT_SHUFFLE="${EVAL3_PRINT_SHUFFLE:-0}"
 export EVAL3_PRINT_SHUFFLE_P="${EVAL3_PRINT_SHUFFLE_P:-0.5}"
 export EVAL3_MASK_DIR="${EVAL3_MASK_DIR:-outputs/eval3_masks}"
 export EVAL3_BG_DIR="${EVAL3_BG_DIR:-outputs/eval3_backgrounds}"
@@ -68,8 +68,10 @@ export EVAL3_SWIFT_EPISODE_FILTER="${EVAL3_SWIFT_EPISODE_FILTER:-0,4,7,8,9,10,11
 export EVAL3_LECUN_EPISODE_FILTER="${EVAL3_LECUN_EPISODE_FILTER:-0,1,2,4,5,6,8,10,11,12,14,15,16,17,18,19}"
 export EVAL3_OBAMA_EPISODE_FILTER="${EVAL3_OBAMA_EPISODE_FILTER:-0,1,2,3,4,7,9,10,11,12,13,14,15,16}"
 
-# EVAL3_EXTRA_REPOS is read by scripts/eval3_concat_patch.py; just propagate it.
-export EVAL3_EXTRA_REPOS="${EVAL3_EXTRA_REPOS:-}"
+# EVAL3_EXTRA_REPOS is read by scripts/eval3_concat_patch.py. This v4 wrapper
+# defaults to the full TOY 3-name corpus; use run_eval3_smolvla_train.sh for
+# single-dataset Swift-only experiments.
+export EVAL3_EXTRA_REPOS="${EVAL3_EXTRA_REPOS:-RobotLearningVLA/yann_lecun_1,RobotLearningVLA/barack_obama_1}"
 
 echo ">> Eval3 aug-train"
 echo "   dataset (primary)     : $REPO"
@@ -81,6 +83,7 @@ echo "   peak_lr / decay_lr    : $PEAK_LR / $DECAY_LR"
 echo "   warmup / decay steps  : $WARMUP_STEPS / $DECAY_STEPS"
 echo "   max_frames_per_ep     : $EVAL3_MAX_FRAMES_PER_EP"
 echo "   task_aug              : $EVAL3_TASK_AUG"
+echo "   task_aug canonical p  : $EVAL3_TASK_AUG_CANONICAL_P"
 echo "   bg_replace (p)        : $EVAL3_BG_REPLACE ($EVAL3_BG_REPLACE_P)"
 echo "   print_shuffle (p)     : $EVAL3_PRINT_SHUFFLE ($EVAL3_PRINT_SHUFFLE_P)"
 echo "   swift_episode_filter  : $EVAL3_SWIFT_EPISODE_FILTER"

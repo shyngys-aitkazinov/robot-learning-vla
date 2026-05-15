@@ -14,10 +14,12 @@ replaces ``make_dataset`` with a version that:
 
 1. Builds the primary ``LeRobotDataset`` exactly as before (using ``--dataset.repo_id``).
 2. Builds one ``LeRobotDataset`` per extra repo, with the same delta_timestamps / transforms.
-3. Wraps them all in a ``ConcatLeRobotDataset`` whose ``__getitem__``/``__len__`` chain through
-   ``torch.utils.data.ConcatDataset``, and whose ``.meta`` is a clone of the primary's meta
-   with stats merged across ALL datasets (count-weighted mean, derived combined std, element-
-   wise min/max, weighted quantile approximation).
+3. Optionally wraps each dataset with Eval 3 filtering/augmentation, then wraps
+   them all in a ``ConcatLeRobotDataset`` whose ``__getitem__``/``__len__`` chain
+   through ``torch.utils.data.ConcatDataset``. Its ``.meta`` is a clone of the
+   primary's meta with stats merged across the filtered frame set actually seen
+   by training (count-weighted mean, derived combined std, element-wise min/max,
+   weighted quantile approximation).
 
 The trainer accesses ``dataset.meta``, ``dataset.meta.stats``, ``dataset.num_frames``,
 ``dataset.num_episodes``, and ``dataset.episodes`` (verified at
@@ -331,10 +333,11 @@ def apply_concat_patch() -> None:
                 )
                 s = w.truncation_summary()
                 logging.info(
-                    "eval3_concat_patch: %s  before=%d  after=%d  kept=%.1f%%  "
-                    "task_aug=%s  bg_aug=%s  print_aug=%s  ep_filter=%s",
-                    s["repo_id"], s["original_num_frames"], s["kept_num_frames"],
-                    s["kept_fraction"] * 100.0, task_aug is not None,
+                    "eval3_concat_patch: %s  frames=%d/%d (%.1f%%)  episodes=%d/%d  "
+                    "action_stat_count=%s  task_aug=%s  bg_aug=%s  print_aug=%s  ep_filter=%s",
+                    s["repo_id"], s["kept_num_frames"], s["original_num_frames"],
+                    s["kept_fraction"] * 100.0, s["kept_num_episodes"],
+                    s["original_num_episodes"], s.get("action_stat_count"), task_aug is not None,
                     bg_aug is not None, print_aug is not None, ep_filter,
                 )
                 prep_datasets.append(w)

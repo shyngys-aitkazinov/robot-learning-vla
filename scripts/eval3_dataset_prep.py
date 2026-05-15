@@ -34,6 +34,7 @@ from __future__ import annotations
 import glob
 import os
 import random
+from copy import deepcopy
 from typing import Any, Callable
 
 import numpy as np
@@ -55,18 +56,14 @@ class TaskAugmenter:
     attributes — to ship to worker processes. Local closures from
     ``make_task_augmenter.<locals>.aug`` are not picklable.
 
-    Variant probabilities (must keep canonical-demo wording dominant since that's
-    the wording the TA will type):
-      40 %  "Place the coke on <Celeb>"           (drop "the" — canonical demo)
-      15 %  "Place the coke on the <Celeb>"       (original recorded wording)
-      15 %  "Put the coke on <Celeb>"             (verb swap)
-      10 %  "Place the can on <Celeb>"            (noun swap)
-      10 %  "Put the can on top of <Celeb>"
-      10 %  "Place the can on top of <Celeb>"
+    Variant probabilities intentionally stay close to demo-day wording:
+      80 %  "Place the coke on <Celeb>"           (canonical demo prompt)
+      20 %  "Place the coke on the <Celeb>"       (original recorded wording)
     """
 
-    def __init__(self, seed: int = 42):
+    def __init__(self, seed: int = 42, canonical_p: float = 0.8):
         self._seed = seed
+        self._canonical_p = float(canonical_p)
         # Use a Python random.Random with the supplied seed. Each forked worker
         # will get its own copy after pickling — that's fine for augmentation.
         self._rng = random.Random(seed)
@@ -77,29 +74,104 @@ class TaskAugmenter:
         for celeb in KNOWN_CELEBRITIES:
             if celeb in task:
                 roll = self._rng.random()
-                if roll < 0.40:
+                if roll < self._canonical_p:
                     return f"Place the coke on {celeb}"
-                elif roll < 0.55:
-                    return f"Place the coke on the {celeb}"
-                elif roll < 0.70:
-                    return f"Put the coke on {celeb}"
-                elif roll < 0.80:
-                    return f"Place the can on {celeb}"
-                elif roll < 0.90:
-                    return f"Put the can on top of {celeb}"
                 else:
-                    return f"Place the can on top of {celeb}"
+                    return f"Place the coke on the {celeb}"
         return task  # unknown celebrity — leave untouched
 
     def __reduce__(self):
         # When DataLoader forks a worker, this returns a constructor + args
         # so a fresh TaskAugmenter is built in the child process.
-        return (self.__class__, (self._seed,))
+        return (self.__class__, (self._seed, self._canonical_p))
 
 
-def make_task_augmenter(seed: int = 42) -> "TaskAugmenter":
+def make_task_augmenter(seed: int = 42, canonical_p: float | None = None) -> "TaskAugmenter":
     """Backward-compatible factory returning a TaskAugmenter instance."""
-    return TaskAugmenter(seed=seed)
+    if canonical_p is None:
+        raw = os.environ.get("EVAL3_TASK_AUG_CANONICAL_P", "0.8").strip()
+        try:
+            canonical_p = float(raw)
+        except ValueError:
+            canonical_p = 0.8
+    canonical_p = min(max(float(canonical_p), 0.0), 1.0)
+    return TaskAugmenter(seed=seed, canonical_p=canonical_p)
+
+
+def _stat_tensor(
+    values: torch.Tensor,
+    source_stat: dict | None = None,
+) -> dict[str, torch.Tensor]:
+    """Compute LeRobot-style stats for a filtered tensor column.
+
+    The filtered Eval 3 wrapper changes which frames are visible to training,
+    so action/state normalization must be recomputed from the same frame set.
+    """
+    x = values.detach().float()
+    if x.ndim == 1:
+        x = x[:, None]
+    if x.ndim == 0:
+        x = x.reshape(1, 1)
+
+    out = {
+        "min": x.amin(dim=0),
+        "max": x.amax(dim=0),
+        "mean": x.mean(dim=0),
+        "std": x.std(dim=0, unbiased=False),
+        "q01": x.quantile(0.01, dim=0),
+        "q10": x.quantile(0.10, dim=0),
+        "q50": x.quantile(0.50, dim=0),
+        "q90": x.quantile(0.90, dim=0),
+        "q99": x.quantile(0.99, dim=0),
+    }
+
+    if source_stat and isinstance(source_stat.get("count"), torch.Tensor):
+        src_count = source_stat["count"]
+        out["count"] = torch.full_like(src_count, float(x.shape[0]))
+    else:
+        out["count"] = torch.tensor(float(x.shape[0]), dtype=torch.float32)
+
+    if source_stat:
+        for key, src in source_stat.items():
+            if key in out and isinstance(src, torch.Tensor):
+                out[key] = out[key].to(dtype=src.dtype)
+    return out
+
+
+def _column_values_to_tensor(values: list[Any]) -> torch.Tensor:
+    """Convert a HF Dataset column slice to a float tensor without decoding videos."""
+    if values and isinstance(values[0], torch.Tensor):
+        return torch.stack([v.detach().float() for v in values])
+    return torch.as_tensor(values, dtype=torch.float32)
+
+
+def _compute_filtered_stats(dataset, valid_indices: list[int]) -> dict[str, dict[str, torch.Tensor]]:
+    """Recompute non-visual metadata stats for the filtered frame subset."""
+    hf = dataset.hf_dataset
+    stats = deepcopy(dataset.meta.stats)
+    column_names = set(getattr(hf, "column_names", []))
+
+    # These are the fields that affect normalization or are saved in processor
+    # state. Images are intentionally left alone; training uses ImageNet visual
+    # stats when requested and VISUAL normalization is IDENTITY for SmolVLA.
+    feature_keys = (
+        "action",
+        "observation.state",
+        "episode_index",
+        "frame_index",
+        "index",
+        "timestamp",
+        "task_index",
+    )
+    for key in feature_keys:
+        if key not in column_names or key not in stats:
+            continue
+        col = hf[key]
+        values = [col[i] for i in valid_indices]
+        if not values:
+            continue
+        stats[key] = _stat_tensor(_column_values_to_tensor(values), stats.get(key))
+    return stats
 
 
 # ----------------------------------------------------------------------------
@@ -304,12 +376,17 @@ class Eval3PrepDataset(Dataset):
         self._max_frames_per_episode = max_frames_per_episode
         self._original_num_frames = original_total
         self._episode_filter = list(keep_eps) if keep_eps is not None else None
+        self._kept_episode_indices = sorted(
+            set(int(dataset.hf_dataset["episode_index"][i]) for i in self._valid_indices)
+        )
+        self._meta = deepcopy(dataset.meta)
+        self._meta.stats = _compute_filtered_stats(dataset, self._valid_indices)
 
     # ----- Trainer-required attributes ------------------------------------
 
     @property
     def meta(self):
-        return self._ds.meta
+        return self._meta
 
     @property
     def features(self):
@@ -325,7 +402,7 @@ class Eval3PrepDataset(Dataset):
 
     @property
     def num_episodes(self) -> int:
-        return self._ds.num_episodes
+        return len(self._kept_episode_indices)
 
     @property
     def episodes(self):
@@ -384,4 +461,10 @@ class Eval3PrepDataset(Dataset):
             "dropped_num_frames": int(self._original_num_frames - self.num_frames),
             "kept_fraction": float(self.num_frames) / float(self._original_num_frames)
             if self._original_num_frames else 0.0,
+            "original_num_episodes": int(self._ds.num_episodes),
+            "kept_num_episodes": int(self.num_episodes),
+            "kept_episode_indices": list(self._kept_episode_indices),
+            "action_stat_count": float(torch.as_tensor(self.meta.stats["action"]["count"]).flatten()[0])
+            if "action" in self.meta.stats and "count" in self.meta.stats["action"]
+            else None,
         }
