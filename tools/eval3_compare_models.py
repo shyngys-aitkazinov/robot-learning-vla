@@ -183,11 +183,27 @@ def _sample_indices(ds: LeRobotDataset, n: int) -> list[int]:
     return sorted(set(int(round(x)) for x in np.linspace(0, len(ds) - 1, n)))
 
 
+def _scalar(value: Any) -> Any:
+    if isinstance(value, torch.Tensor):
+        return value.detach().cpu().reshape(-1)[0].item()
+    if isinstance(value, np.ndarray):
+        return value.reshape(-1)[0].item()
+    if isinstance(value, (list, tuple)):
+        return value[0]
+    return value
+
+
+def _episode_row(episodes: Any, episode: int) -> Any:
+    if hasattr(episodes, "iloc"):
+        return episodes.iloc[int(episode)]
+    return episodes[int(episode)]
+
+
 def _final_phase_index(ds: LeRobotDataset, episode: int = 0, frac: float = 0.95) -> int:
     ep_df = ds.meta.episodes
-    row = ep_df.iloc[int(episode)]
-    f0 = int(row["dataset_from_index"])
-    f1 = int(row["dataset_to_index"])
+    row = _episode_row(ep_df, int(episode))
+    f0 = int(_scalar(row["dataset_from_index"]))
+    f1 = int(_scalar(row["dataset_to_index"]))
     return min(f1 - 1, f0 + int((f1 - f0 - 1) * frac))
 
 
