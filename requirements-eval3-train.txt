@@ -1,0 +1,13 @@
+# Optional extras for SmolVLA fine-tuning on macOS or GPU/Linux.
+#
+# Install into the same venv ONLY when training/deploying SmolVLA; enter via:
+#   python scripts/train_eval3_smolvla.py ...
+#   python scripts/eval3_vla_deploy.py ...
+# which apply `scripts/eval3_lerobot_shim.py` before `lerobot.policies` imports.
+#
+#   uv pip install transformers accelerate sentencepiece
+#
+# Or bootstrap flag:
+#   EVAL3_INSTALL_SMOLVLA_DEPS=1 ./install.sh
+#
+# Isolated GPU training env remains optional — docs/eval3/smolvla_linux_training.md.

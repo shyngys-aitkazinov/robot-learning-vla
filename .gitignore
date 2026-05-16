@@ -21,3 +21,8 @@ Thumbs.db
 *.swp
 *.swo
 .idea/
+
+# Local-only notes and calibration copies (do not push)
+Message.txt
+my_awesome_leader_arm.json
+my_awesome_follower_arm.json

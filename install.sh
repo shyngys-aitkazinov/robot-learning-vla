@@ -12,6 +12,7 @@
 #   PYTHON_VERSION=3.12   ./install.sh
 #   LEROBOT_SPEC="lerobot[hardware,viz,feetech,dynamixel]"   ./install.sh
 #   HF_TOKEN=hf_...       ./install.sh
+#   EVAL3_INSTALL_SMOLVLA_DEPS=1   ./install.sh   # transformers / accelerate / sentencepiece for SmolVLA
 
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -41,6 +42,18 @@ fi
 # --- 3. Install lerobot --------------------------------------------------
 echo ">> uv pip install ${LEROBOT_SPEC}"
 uv pip install "${LEROBOT_SPEC}"
+
+# Feetech Servo SDK — required to talk to SO-100/SO-101 STS-3215 servos.
+# Not pulled in by bare `lerobot`; ships in the `lerobot[feetech]` extra as
+# `feetech-servo-sdk` (which exposes the `scservo_sdk` Python module).
+echo ">> uv pip install feetech-servo-sdk (required for SO-101 motor bus)"
+uv pip install 'feetech-servo-sdk>=1.0.0,<2.0.0'
+
+if [[ "${EVAL3_INSTALL_SMOLVLA_DEPS:-}" == "1" ]]; then
+    echo ">> EVAL3_INSTALL_SMOLVLA_DEPS=1: installing transformers stack for SmolVLA"
+    # num2words is pulled in by transformers' SmolVLM processor at runtime
+    uv pip install transformers accelerate sentencepiece num2words
+fi
 
 # --- 4. Hugging Face auth (optional) ------------------------------------
 if [[ -n "${HF_TOKEN:-}" ]]; then
