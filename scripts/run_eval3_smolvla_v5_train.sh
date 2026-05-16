@@ -10,7 +10,8 @@
 #
 # Full Brev run:
 #   tmux new -s eval3_v5
-#   EVAL3_POLICY_DEVICE=cuda ./scripts/run_eval3_smolvla_v5_train.sh 2>&1 | tee outputs/train/eval3_3way_50k_v5_newdata_balanced/train.log
+#   mkdir -p outputs/train/logs
+#   EVAL3_POLICY_DEVICE=cuda ./scripts/run_eval3_smolvla_v5_train.sh 2>&1 | tee outputs/train/logs/eval3_3way_50k_v5_newdata_balanced.log
 
 set -euo pipefail
 
@@ -50,8 +51,6 @@ export EVAL3_BG_DIR="${EVAL3_BG_DIR:-outputs/eval3_backgrounds}"
 unset EVAL3_SWIFT_EPISODE_FILTER
 unset EVAL3_LECUN_EPISODE_FILTER
 unset EVAL3_OBAMA_EPISODE_FILTER
-
-mkdir -p "$OUT"
 
 echo ">> Eval3 v5 new-data balanced train"
 echo "   dataset (primary)     : $REPO"
