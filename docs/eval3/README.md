@@ -19,6 +19,7 @@ This folder implements the **foundation plan** (scene, data regimes, recording Q
 | [train_regimes.md](train_regimes.md) | Phased training A→B→C + confusion auditing |
 | [rollout.md](rollout.md) | Demo-day CLI contract + robot wiring notes |
 | [task3_deploy_readiness.md](task3_deploy_readiness.md) | **Pre-flight checklist**, SmolVLA **`front`→`camera1`** workaround, rubric + hardware |
+| [charuco_pipeline.md](charuco_pipeline.md) | **Experimental** — ChArUco fiducial boards as celebrity stand-ins for synthetic-on-real data; print/verify/compose CLIs and post-processing sketch |
 
 ## Repo scripts / tools
 
@@ -64,3 +65,22 @@ python scripts/eval3_vla_deploy.py --robot.type=so101_follower ... \
 ```
 
 Wire **`eval3_rollout`** / BC checkpoints only for **pipeline sanity**. Real Eval 3 uses **SmolVLA** weights + **`eval3_vla_deploy`** on the arm.
+
+### ChArUco synthetic-on-real pipeline (experimental)
+
+See **[charuco_pipeline.md](charuco_pipeline.md)** for the full workflow + caveats.
+
+```bash
+# 1. Print three identical A5 boards on A4 with crop marks
+for pos in left centre right; do
+  python tools/eval3_make_charuco_board.py --content-mm 130x180 \
+      --squares-x 5 --squares-y 7 --chroma-mm 60 \
+      --out outputs/eval3_charuco/board_${pos}
+done
+
+# 2. Live detection check (camera 0 pointed at a printed board)
+python tools/eval3_charuco_check.py --camera-index 0
+
+# 3. Live compositing preview — locks homography on frame 0, warps target image onto board
+python tools/eval3_charuco_compose.py --camera-index 0 --target-image /path/to/celeb.jpg
+```

@@ -7,9 +7,76 @@ A `uv`-managed Python environment for working with the
 SO-100 / SO-101 hardware. Installs `lerobot` from PyPI into a local `.venv/`
 via `uv pip install`. Works on macOS / Apple Silicon (no CUDA) and Linux.
 
-## Eval 3 (VLA coke-on-celebrity print)
+## Eval 3 (VLA: place the coke on `<celebrity>`)
 
-Foundation docs, recording pilots, dataset matrix, compute checklist, and tooling live under **[docs/eval3/](docs/eval3/README.md)** (inspect Hub datasets, BC overfit sanity script, timed rollout CLI skeleton).
+The training + deploy stack for the Eval 3 task lives in
+`scripts/eval3_*` and `tools/eval3_*`. Foundation docs (scene spec,
+prompt protocol, dataset matrix, compute checklist, augmentation regimes)
+are under **[docs/eval3/](docs/eval3/README.md)**.
+
+For a self-contained recipe to run the published checkpoint
+(`RobotLearningVLA/eval3-smolvla-3way-50k-v3-fresh`) on an SO-101 follower,
+follow **[docs/eval3/friend_deploy_handoff.md](docs/eval3/friend_deploy_handoff.md)**.
+
+Common entry points (all require `EVAL3_INSTALL_SMOLVLA_DEPS=1 ./install.sh` first):
+
+```bash
+# Inspect a Hub dataset (features, task histogram, sample tensor shapes)
+python tools/inspect_lerobot_dataset.py --repo-id RobotLearningVLA/taylor_swift_1
+
+# Print SmolVLA compatibility flags (rename_map + empty_cameras) for a given dataset
+python tools/eval3_smolvla_compat.py --repo-id RobotLearningVLA/taylor_swift_1
+
+# Fine-tune SmolVLA — single-dataset Swift baseline
+./scripts/run_eval3_smolvla_train.sh
+
+# Fine-tune SmolVLA — 3-celebrity corpus with the full augmentation stack
+#   (frame truncation + task-string aug + bg replacement + print-shuffle + per-dataset episode filters)
+./scripts/run_eval3_smolvla_aug_train.sh
+
+# Closed-loop deploy on real SO-101 (rename_map MUST match training)
+python scripts/eval3_vla_deploy.py \
+  --robot.type=so101_follower --robot.port=<tty> --robot.id=my_awesome_follower_arm \
+  --robot.cameras='{front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30}}' \
+  --dataset_repo_id=RobotLearningVLA/taylor_swift_1 \
+  --rename_map='{"observation.images.front":"observation.images.camera1"}' \
+  --policy.path=outputs/train/eval3_smolvla/checkpoints/<STEP>/pretrained_model \
+  --policy.device=mps --episode_time_s=20
+
+# Same command with --dry_run to verify the checkpoint loads without driving hardware
+```
+
+`scripts/train_eval3_smolvla.py` is the same CLI as `lerobot-train` but applies
+two import-time shims (`scripts/eval3_lerobot_shim.py` to keep `lerobot.policies.groot`
+importable with `transformers` installed; `scripts/eval3_concat_patch.py` to enable
+multi-dataset joint training via `EVAL3_EXTRA_REPOS=<repo1>,<repo2>,...`). **Do not
+invoke `lerobot-train` directly** in this venv once SmolVLA extras are installed —
+it will crash at policy import.
+
+### ChArUco synthetic-on-real data (experimental)
+
+Three CLIs in `tools/eval3_charuco_*` cover an experimental pipeline aimed at
+runs 7–9 of Eval 3 (OOD celebrities). The plan is to record teleop episodes
+against printed ChArUco fiducial boards as celebrity stand-ins, then
+post-process to warp arbitrary celebrity images onto the board area while
+preserving the can on top. **Run the prereq probes first** — see
+[docs/eval3/charuco_pipeline.md](docs/eval3/charuco_pipeline.md) for the full
+workflow, caveats, and why this is experimental.
+
+```bash
+# Print three identical A5 boards on A4 with crop marks (cv2.aruco already ships with the venv)
+for pos in left centre right; do
+  python tools/eval3_make_charuco_board.py --content-mm 130x180 \
+      --squares-x 5 --squares-y 7 --chroma-mm 60 \
+      --out outputs/eval3_charuco/board_${pos}
+done
+
+# Verify detection live against your recording camera
+python tools/eval3_charuco_check.py --camera-index 0
+
+# Preview the full compose pipeline (warp target -> HSV-key the can on top)
+python tools/eval3_charuco_compose.py --camera-index 0 --target-image celeb.jpg
+```
 
 ## Quickstart
 
@@ -46,6 +113,7 @@ All overrideable via env vars before running the script:
 | `PYTHON_VERSION` | `3.12` | Python minor version pin. Stay on `3.12` on macOS 14 — see [Platform caveats](#platform-caveats). |
 | `LEROBOT_SPEC` | `lerobot` | The package spec passed to `uv pip install`. Add extras here. |
 | `HF_TOKEN` | unset | If set, the script logs into Hugging Face automatically. |
+| `EVAL3_INSTALL_SMOLVLA_DEPS` | unset | When `=1`, additionally installs `transformers accelerate sentencepiece num2words` for SmolVLA fine-tuning + deploy. Required for the Eval 3 pipeline. |
 
 Example with a few extras:
 
@@ -457,10 +525,24 @@ camera resolution. Try `--display_data=false`, lower fps, or smaller frames
 ## Files of note
 
 - `install.sh` — bootstrap script (see [What `install.sh` does](#what-installsh-does)).
+  Set `EVAL3_INSTALL_SMOLVLA_DEPS=1` to also pull in the SmolVLA transformers
+  stack.
 - `pyproject.toml` — minimal project metadata. The actual install is driven
   by `install.sh` calling `uv pip install`, not by `uv sync`.
 - `.venv/` — provisioned by `install.sh` (git-ignored).
-- `camera.py` — quick OpenCV live-preview using `lerobot.cameras.OpenCVCamera`
-  (press `q` to quit).
+- `scripts/camera.py` — quick OpenCV live-preview using
+  `lerobot.cameras.OpenCVCamera` (press `q` to quit).
+- `scripts/eval3_*` — Eval 3 training, deploy, and the import-time shims that
+  let SmolVLA coexist with the upstream GROOT policy stack. See
+  [Eval 3](#eval-3-vla-place-the-coke-on-celebrity) above and
+  [docs/eval3/README.md](docs/eval3/README.md).
+- `tools/eval3_*` — offline audits, mask / background pool builders,
+  visualisation, and synthetic OOD probes. None of these touch hardware.
+- `requirements-eval3-train.txt` — pointer file documenting the SmolVLA
+  extras (it is **not** a `pip install -r` target).
+- `outputs/` — git-ignored. Holds training checkpoints
+  (`outputs/train/<job>/checkpoints/<step>/pretrained_model/`), rollout logs
+  (`outputs/eval3_rollouts/`), and the augmentation assets
+  (`outputs/eval3_masks/`, `outputs/eval3_backgrounds/`).
 - `CLAUDE.md` — guidance for [Claude Code](https://claude.com/claude-code)
   when iterating on this repo.
