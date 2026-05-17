@@ -312,6 +312,7 @@ def apply_concat_patch() -> None:
                 return out
 
             new_episode_exclude = _parse_repo_episode_map("EVAL3_NEW_EPISODE_EXCLUDE")
+            new_episode_keep = _parse_repo_episode_map("EVAL3_NEW_EPISODE_KEEP")
             over_cap_episodes = _parse_repo_episode_map("EVAL3_TRUNCATE_ALLOW_OVER_CAP_EPISODES")
 
             # Placement-truncation knobs (Rule A from the v6 plan).
@@ -382,18 +383,25 @@ def apply_concat_patch() -> None:
                     else:
                         logging.warning("eval3_concat_patch: %s print-shuffle skipped (missing masks)", slug)
 
-                # Episode filter applies ONLY to old data — new data's value comes
-                # from its 3-position diversity, no need to drop episodes.
+                # Episode filter:
+                #   - new data: EVAL3_NEW_EPISODE_KEEP overrides everything (only keep listed).
+                #     Otherwise EVAL3_NEW_EPISODE_EXCLUDE drops listed indices. Otherwise no filter.
+                #   - old data: legacy per-celebrity filter env vars.
                 if new_data:
+                    kept = (
+                        new_episode_keep.get(_repo_name(d.repo_id), set())
+                        | new_episode_keep.get(d.repo_id, set())
+                    )
                     excluded = (
                         new_episode_exclude.get(_repo_name(d.repo_id), set())
                         | new_episode_exclude.get(d.repo_id, set())
                     )
-                    ep_filter = (
-                        [i for i in range(int(d.num_episodes)) if i not in excluded]
-                        if excluded
-                        else None
-                    )
+                    if kept:
+                        ep_filter = sorted(kept)
+                    elif excluded:
+                        ep_filter = [i for i in range(int(d.num_episodes)) if i not in excluded]
+                    else:
+                        ep_filter = None
                 else:
                     ep_filter = {"swift": swift_filter, "lecun": lecun_filter, "obama": obama_filter}.get(slug)
                 # Placement truncation applies ONLY to new data — old data already
