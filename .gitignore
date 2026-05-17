@@ -10,8 +10,13 @@ uv.lock
 # install.sh backups
 pyproject.toml.bak.*
 
-# Camera captures from lerobot-find-cameras
+# Camera captures from lerobot-find-cameras + generated training artifacts
 outputs/
+
+# Locally materialized LeRobot datasets and 3rd-party data dumps (see datasets/README.md).
+# Ignore everything under datasets/ except the README that documents what belongs there.
+datasets/*
+!datasets/README.md
 
 # OS
 .DS_Store

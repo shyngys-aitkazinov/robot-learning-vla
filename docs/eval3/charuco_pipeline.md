@@ -236,6 +236,46 @@ The same per-frame `compose()` function is what the live tool uses, so
 whatever you verify in [§3](#3-verify-the-compositing-pipeline-live) is
 exactly what the offline processor will produce.
 
+### Celebrity face pool — Pins Face Recognition (Kaggle)
+
+The "arbitrary face diversity" the post-processor injects comes from a
+public celebrity-face corpus stored locally in
+[`datasets/pins-face-recognition.zip`](../../datasets/README.md#pins-face-recognition-celebrity-face-pool).
+Source: <https://www.kaggle.com/datasets/hereisburak/pins-face-recognition>
+(105 celebrities, ~167 images each, ~17.5k images total, ~389 MB unzipped).
+
+Download + extract:
+
+```bash
+./scripts/download_pins_faces.sh           # idempotent; --force to refetch
+```
+
+Layout once extracted:
+
+```
+datasets/pins-face-recognition/
+  105_classes_pins_dataset/
+    pins_<Celebrity Name>/
+      <Celebrity Name><photo#>_<id>.jpg
+```
+
+When wiring this into the post-processor, two things matter:
+
+- **Hold out the three TOY identities** (Taylor Swift, Yann LeCun, Barack
+  Obama) from the Pins pool when assigning faces to ChArUco episodes —
+  otherwise you're training on the identities that runs 1–6 are scored
+  against and the experiment no longer measures OOD generalisation.
+- **The task-string template `<left marker>` / `<middle marker>` / `<right
+  marker>`** that the ChArUco recordings carry (see the inspection of
+  `meta/tasks.parquet` in the dataset README) is the substitution slot:
+  per episode, pick a celebrity, warp their face onto the relevant board,
+  and rewrite the task string from `Place the coke on <left marker>` to
+  `Place the coke on <Celebrity Name>`. Same hook that
+  `scripts/eval3_dataset_prep.py:TaskAugmenter` already uses.
+
+Caveats (license, identity overlap, crop variance, etc.) are catalogued in
+[`datasets/README.md`](../../datasets/README.md#pins-face-recognition-celebrity-face-pool).
+
 ## Known caveats
 
 - **Multi-print spatial reasoning.** A policy trained on ChArUco recordings
