@@ -293,8 +293,36 @@ def apply_concat_patch() -> None:
             lecun_filter = _parse_filter("EVAL3_LECUN_EPISODE_FILTER")
             obama_filter = _parse_filter("EVAL3_OBAMA_EPISODE_FILTER")
 
+            def _parse_repo_episode_map(env_var: str) -> dict[str, set[int]]:
+                """Parse 'repo_slug:0,1;other_repo:3' into {repo_slug: {episodes}}."""
+                raw = os.environ.get(env_var, "").strip()
+                out: dict[str, set[int]] = {}
+                if not raw:
+                    return out
+                for part in raw.split(";"):
+                    part = part.strip()
+                    if not part:
+                        continue
+                    if ":" not in part:
+                        logging.warning("eval3_concat_patch: ignoring invalid %s entry %r", env_var, part)
+                        continue
+                    repo_key, eps_raw = part.split(":", 1)
+                    eps = {int(x) for x in eps_raw.split(",") if x.strip()}
+                    out[repo_key.strip()] = eps
+                return out
+
+            new_episode_exclude = _parse_repo_episode_map("EVAL3_NEW_EPISODE_EXCLUDE")
+            over_cap_episodes = _parse_repo_episode_map("EVAL3_TRUNCATE_ALLOW_OVER_CAP_EPISODES")
+
             # Placement-truncation knobs (Rule A from the v6 plan).
             truncate_at_placement_enabled = os.environ.get("EVAL3_TRUNCATE_AT_PLACEMENT", "1") == "1"
+            trunc_mode = os.environ.get("EVAL3_TRUNCATE_PLACEMENT_MODE", "last").strip().lower()
+            if trunc_mode not in {"first", "last"}:
+                logging.warning(
+                    "eval3_concat_patch: invalid EVAL3_TRUNCATE_PLACEMENT_MODE=%r; using 'last'",
+                    trunc_mode,
+                )
+                trunc_mode = "last"
             try:
                 trunc_grip = float(os.environ.get("EVAL3_TRUNCATE_GRIP_THRESHOLD", "20"))
             except ValueError:
@@ -307,6 +335,10 @@ def apply_concat_patch() -> None:
                 trunc_buffer = int(os.environ.get("EVAL3_TRUNCATE_BUFFER_FRAMES", "60"))
             except ValueError:
                 trunc_buffer = 60
+            try:
+                trunc_over_cap_extra = int(os.environ.get("EVAL3_TRUNCATE_OVER_CAP_EXTRA_FRAMES", "90"))
+            except ValueError:
+                trunc_over_cap_extra = 90
 
             def _slug_from_repo(repo: str) -> str:
                 """Map repo_id -> celebrity slug. Both old (taylor_swift_1) and new
@@ -326,6 +358,9 @@ def apply_concat_patch() -> None:
                 trajectories and need placement truncation. Old data already ends
                 at the placement pose and must NOT be truncated."""
                 return "dataset_v2" in repo.lower()
+
+            def _repo_name(repo: str) -> str:
+                return repo.rsplit("/", 1)[-1]
 
             prep_datasets = []
             for d in datasets:
@@ -350,12 +385,24 @@ def apply_concat_patch() -> None:
                 # Episode filter applies ONLY to old data — new data's value comes
                 # from its 3-position diversity, no need to drop episodes.
                 if new_data:
-                    ep_filter = None
+                    excluded = (
+                        new_episode_exclude.get(_repo_name(d.repo_id), set())
+                        | new_episode_exclude.get(d.repo_id, set())
+                    )
+                    ep_filter = (
+                        [i for i in range(int(d.num_episodes)) if i not in excluded]
+                        if excluded
+                        else None
+                    )
                 else:
                     ep_filter = {"swift": swift_filter, "lecun": lecun_filter, "obama": obama_filter}.get(slug)
                 # Placement truncation applies ONLY to new data — old data already
                 # ends at placement so truncating it would cut the place itself.
                 trunc_at_place = bool(new_data and truncate_at_placement_enabled)
+                allow_over_cap = (
+                    over_cap_episodes.get(_repo_name(d.repo_id), set())
+                    | over_cap_episodes.get(d.repo_id, set())
+                )
                 w = Eval3PrepDataset(
                     d,
                     max_frames_per_episode=max_frames,
@@ -364,6 +411,9 @@ def apply_concat_patch() -> None:
                     print_aug_fn=print_aug,
                     episode_filter=ep_filter,
                     truncate_at_placement=trunc_at_place,
+                    truncate_placement_mode=trunc_mode,
+                    truncate_allow_over_cap_episodes=allow_over_cap,
+                    truncate_over_cap_extra_frames=trunc_over_cap_extra,
                     truncate_grip_threshold=trunc_grip,
                     truncate_lift_threshold=trunc_lift,
                     truncate_buffer_frames=trunc_buffer,
@@ -371,11 +421,13 @@ def apply_concat_patch() -> None:
                 s = w.truncation_summary()
                 logging.info(
                     "eval3_concat_patch: %s  frames=%d/%d (%.1f%%)  episodes=%d/%d  "
-                    "trunc_place=%s (match=%.0f%%, avg_kept=%.0f)  task_aug=%s  bg_aug=%s  print_aug=%s  ep_filter=%s",
+                    "trunc_place=%s mode=%s (match=%.0f%%, avg_kept=%.0f)  "
+                    "task_aug=%s  bg_aug=%s  print_aug=%s  ep_filter=%s",
                     s["repo_id"], s["kept_num_frames"], s["original_num_frames"],
                     s["kept_fraction"] * 100.0, s["kept_num_episodes"],
                     s["original_num_episodes"],
-                    s["truncate_at_placement"], s["placement_match_rate"] * 100.0,
+                    s["truncate_at_placement"], s["truncate_placement_mode"],
+                    s["placement_match_rate"] * 100.0,
                     s["placement_avg_kept_frames"],
                     task_aug is not None, bg_aug is not None, print_aug is not None, ep_filter,
                 )

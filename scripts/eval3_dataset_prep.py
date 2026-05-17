@@ -344,6 +344,9 @@ class Eval3PrepDataset(Dataset):
         image_key: str = "observation.images.front",
         episode_filter: list[int] | None = None,
         truncate_at_placement: bool = False,
+        truncate_placement_mode: str = "first",
+        truncate_allow_over_cap_episodes: list[int] | set[int] | None = None,
+        truncate_over_cap_extra_frames: int = 0,
         truncate_grip_threshold: float = 20.0,
         truncate_lift_threshold: float = -30.0,
         truncate_buffer_frames: int = 60,
@@ -366,10 +369,25 @@ class Eval3PrepDataset(Dataset):
         if truncate_at_placement:
             actions_col = dataset.hf_dataset["action"]
 
+        placement_mode = str(truncate_placement_mode or "first").strip().lower()
+        if placement_mode not in {"first", "last"}:
+            placement_mode = "first"
+        over_cap_eps = (
+            {int(e) for e in truncate_allow_over_cap_episodes}
+            if truncate_allow_over_cap_episodes is not None
+            else set()
+        )
+        over_cap_extra_frames = max(0, int(truncate_over_cap_extra_frames))
+
         # Build the per-episode kept-range.
-        #   * truncate_at_placement: find FIRST frame with gripper>=grip_thresh AND
-        #     shoulder_lift>=lift_thresh, set cap = match_frame + buffer. Falls back
-        #     to max_frames_per_episode if no match (rare).
+        #   * truncate_at_placement + mode=first: find FIRST frame with
+        #     gripper>=grip_thresh AND shoulder_lift>=lift_thresh, set cap =
+        #     match_frame + buffer. This was the original v6 rule, but it can
+        #     catch the pre-grasp gripper-open event in dataset_v2_*.
+        #   * truncate_at_placement + mode=last: find the LAST matching frame
+        #     before the final home-return tail, set cap to that frame inclusive,
+        #     and still respect max_frames_per_episode. This keeps the actual
+        #     visual placement while dropping the home tail.
         #   * otherwise: cap = f0 + max_frames_per_episode (legacy behaviour).
         # If episode_filter is provided, only include those episode indices.
         valid: list[int] = []
@@ -384,17 +402,27 @@ class Eval3PrepDataset(Dataset):
             cap = None
             match_offset = None
             if truncate_at_placement and actions_col is not None:
-                # Scan from start, early-exit at first match.
+                # Scan for placement-like open/lift frames.
+                matched_offsets = []
                 for off in range(f1i - f0i):
                     a = actions_col[f0i + off]
                     # Tensors may be torch.Tensor or python list depending on HF backend.
                     grip = float(a[5])
                     lift = float(a[1])
                     if grip >= truncate_grip_threshold and lift >= truncate_lift_threshold:
-                        match_offset = off
-                        break
-                if match_offset is not None:
-                    cap = min(f0i + match_offset + int(truncate_buffer_frames), f1i)
+                        matched_offsets.append(off)
+                        if placement_mode == "first":
+                            break
+                if matched_offsets:
+                    match_offset = matched_offsets[0] if placement_mode == "first" else matched_offsets[-1]
+                    if placement_mode == "first":
+                        cap = f0i + match_offset + int(truncate_buffer_frames)
+                    else:
+                        cap = f0i + match_offset + 1
+                    if max_frames_per_episode is not None:
+                        extra = over_cap_extra_frames if ep_idx in over_cap_eps else 0
+                        cap = min(cap, f0i + int(max_frames_per_episode) + extra)
+                    cap = min(cap, f1i)
             if cap is None:
                 if max_frames_per_episode is None:
                     cap = f1i
@@ -411,6 +439,7 @@ class Eval3PrepDataset(Dataset):
         self._original_num_frames = original_total
         self._episode_filter = list(keep_eps) if keep_eps is not None else None
         self._truncate_at_placement = truncate_at_placement
+        self._truncate_placement_mode = placement_mode
         self._truncation_log = truncation_log
         self._kept_episode_indices = sorted(
             set(int(dataset.hf_dataset["episode_index"][i]) for i in self._valid_indices)
@@ -497,6 +526,7 @@ class Eval3PrepDataset(Dataset):
             "repo_id": self.repo_id,
             "max_frames_per_episode": self._max_frames_per_episode,
             "truncate_at_placement": self._truncate_at_placement,
+            "truncate_placement_mode": self._truncate_placement_mode,
             "placement_match_rate": (place_matched / place_total) if place_total else 0.0,
             "placement_avg_kept_frames": (place_kept_frames / place_total) if place_total else 0,
             "original_num_frames": int(self._original_num_frames),

@@ -72,12 +72,18 @@ export EVAL3_LECUN_EPISODE_FILTER="${EVAL3_LECUN_EPISODE_FILTER:-3,7,9,13}"
 export EVAL3_OBAMA_EPISODE_FILTER="${EVAL3_OBAMA_EPISODE_FILTER:-5,6,8,17}"
 
 # Placement truncation: applied only to dataset_v2_* (new data records
-# [home -> place -> home] cycles; truncate at first place event + 60-frame
-# buffer so the trajectory ends at the placement pose like the old data).
+# [home -> place -> home] cycles). Use the LAST placement-like open/lift frame,
+# capped by EVAL3_MAX_FRAMES_PER_EP, so we keep the actual visual placement and
+# drop the final home-return tail. The original first-match rule catches the
+# pre-grasp gripper-open event in these recordings.
 export EVAL3_TRUNCATE_AT_PLACEMENT="${EVAL3_TRUNCATE_AT_PLACEMENT:-1}"
+export EVAL3_TRUNCATE_PLACEMENT_MODE="${EVAL3_TRUNCATE_PLACEMENT_MODE:-last}"
 export EVAL3_TRUNCATE_GRIP_THRESHOLD="${EVAL3_TRUNCATE_GRIP_THRESHOLD:-20}"
 export EVAL3_TRUNCATE_LIFT_THRESHOLD="${EVAL3_TRUNCATE_LIFT_THRESHOLD:--30}"
 export EVAL3_TRUNCATE_BUFFER_FRAMES="${EVAL3_TRUNCATE_BUFFER_FRAMES:-60}"
+DEFAULT_OVER_CAP_EPISODES="dataset_v2_barack_obama_middle_1:0,5,7;dataset_v2_taylor_swift_left_1:1,3;dataset_v2_yann_lecun_left_1:1"
+export EVAL3_TRUNCATE_ALLOW_OVER_CAP_EPISODES="${EVAL3_TRUNCATE_ALLOW_OVER_CAP_EPISODES-$DEFAULT_OVER_CAP_EPISODES}"
+export EVAL3_TRUNCATE_OVER_CAP_EXTRA_FRAMES="${EVAL3_TRUNCATE_OVER_CAP_EXTRA_FRAMES:-90}"
 
 # v6 default: ALL 11 repos (3 old + 8 dataset_v2_* minus the primary).
 DEFAULT_EXTRA_REPOS="RobotLearningVLA/yann_lecun_1,RobotLearningVLA/barack_obama_1,RobotLearningVLA/dataset_v2_taylor_swift_left_1,RobotLearningVLA/dataset_v2_taylor_swift_middle_1,RobotLearningVLA/dataset_v2_taylor_swift_right_1,RobotLearningVLA/dataset_v2_yann_lecun_left_1,RobotLearningVLA/dataset_v2_yann_lecun_middle_1,RobotLearningVLA/dataset_v2_yann_lecun_right_1,RobotLearningVLA/dataset_v2_barack_obama_left_1,RobotLearningVLA/dataset_v2_barack_obama_middle_1,RobotLearningVLA/dataset_v2_barack_obama_right_1"
@@ -96,7 +102,8 @@ echo "   task_aug              : $EVAL3_TASK_AUG"
 echo "   task_aug canonical p  : $EVAL3_TASK_AUG_CANONICAL_P"
 echo "   bg_replace (p)        : $EVAL3_BG_REPLACE ($EVAL3_BG_REPLACE_P)"
 echo "   print_shuffle (p)     : $EVAL3_PRINT_SHUFFLE ($EVAL3_PRINT_SHUFFLE_P)"
-echo "   truncate_at_placement : $EVAL3_TRUNCATE_AT_PLACEMENT (grip>=$EVAL3_TRUNCATE_GRIP_THRESHOLD, lift>=$EVAL3_TRUNCATE_LIFT_THRESHOLD, buf=$EVAL3_TRUNCATE_BUFFER_FRAMES)"
+echo "   truncate_at_placement : $EVAL3_TRUNCATE_AT_PLACEMENT mode=$EVAL3_TRUNCATE_PLACEMENT_MODE (grip>=$EVAL3_TRUNCATE_GRIP_THRESHOLD, lift>=$EVAL3_TRUNCATE_LIFT_THRESHOLD, buf=$EVAL3_TRUNCATE_BUFFER_FRAMES)"
+echo "   over-cap episodes     : ${EVAL3_TRUNCATE_ALLOW_OVER_CAP_EPISODES:-(none)} (+$EVAL3_TRUNCATE_OVER_CAP_EXTRA_FRAMES frames)"
 echo "   swift_episode_filter  : $EVAL3_SWIFT_EPISODE_FILTER"
 echo "   lecun_episode_filter  : $EVAL3_LECUN_EPISODE_FILTER"
 echo "   obama_episode_filter  : $EVAL3_OBAMA_EPISODE_FILTER"
