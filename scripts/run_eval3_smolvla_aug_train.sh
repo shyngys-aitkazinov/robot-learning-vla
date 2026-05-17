@@ -56,22 +56,32 @@ export EVAL3_TASK_AUG="${EVAL3_TASK_AUG:-1}"
 export EVAL3_TASK_AUG_CANONICAL_P="${EVAL3_TASK_AUG_CANONICAL_P:-0.8}"
 export EVAL3_BG_REPLACE="${EVAL3_BG_REPLACE:-1}"
 export EVAL3_BG_REPLACE_P="${EVAL3_BG_REPLACE_P:-0.3}"
-export EVAL3_PRINT_SHUFFLE="${EVAL3_PRINT_SHUFFLE:-0}"
+export EVAL3_PRINT_SHUFFLE="${EVAL3_PRINT_SHUFFLE:-1}"
 export EVAL3_PRINT_SHUFFLE_P="${EVAL3_PRINT_SHUFFLE_P:-0.5}"
 export EVAL3_MASK_DIR="${EVAL3_MASK_DIR:-outputs/eval3_masks}"
 export EVAL3_BG_DIR="${EVAL3_BG_DIR:-outputs/eval3_backgrounds}"
-# Per-dataset episode filters from the pre-flight audits:
-#   Swift: drop ep 1,2,3,5,6,13 (audit 3: near-zero extension or no gripper-open)
-#   LeCun: drop ep 3,7,9,13     (audit Q1: wrist_roll negative-mode operator noise)
-#   Obama: drop ep 5,6,8,17     (audit Q1: wrist_roll negative-mode operator noise)
+# v6 plan: per-celebrity OLD-data filters target the NEGATIVE wrist_roll mode so
+# the old data matches the NEW data's wrist_roll convention (~ -86 deg). The
+# previous v3 filters kept the POSITIVE mode, which conflicts with the new data.
+#   Swift OLD: keep audit-3 good episodes (unimodal wrist_roll, no flip needed).
+#   LeCun OLD: keep only the 4 negative-mode episodes (matches new data).
+#   Obama OLD: keep only the 4 negative-mode episodes (matches new data).
+# Filters apply ONLY to old data; new dataset_v2_* uses all episodes (no filter).
 export EVAL3_SWIFT_EPISODE_FILTER="${EVAL3_SWIFT_EPISODE_FILTER:-0,4,7,8,9,10,11,12,14,15,16,17,18,19}"
-export EVAL3_LECUN_EPISODE_FILTER="${EVAL3_LECUN_EPISODE_FILTER:-0,1,2,4,5,6,8,10,11,12,14,15,16,17,18,19}"
-export EVAL3_OBAMA_EPISODE_FILTER="${EVAL3_OBAMA_EPISODE_FILTER:-0,1,2,3,4,7,9,10,11,12,13,14,15,16}"
+export EVAL3_LECUN_EPISODE_FILTER="${EVAL3_LECUN_EPISODE_FILTER:-3,7,9,13}"
+export EVAL3_OBAMA_EPISODE_FILTER="${EVAL3_OBAMA_EPISODE_FILTER:-5,6,8,17}"
 
-# EVAL3_EXTRA_REPOS is read by scripts/eval3_concat_patch.py. This v4 wrapper
-# defaults to the full TOY 3-name corpus; use run_eval3_smolvla_train.sh for
-# single-dataset Swift-only experiments.
-export EVAL3_EXTRA_REPOS="${EVAL3_EXTRA_REPOS:-RobotLearningVLA/yann_lecun_1,RobotLearningVLA/barack_obama_1}"
+# Placement truncation: applied only to dataset_v2_* (new data records
+# [home -> place -> home] cycles; truncate at first place event + 60-frame
+# buffer so the trajectory ends at the placement pose like the old data).
+export EVAL3_TRUNCATE_AT_PLACEMENT="${EVAL3_TRUNCATE_AT_PLACEMENT:-1}"
+export EVAL3_TRUNCATE_GRIP_THRESHOLD="${EVAL3_TRUNCATE_GRIP_THRESHOLD:-20}"
+export EVAL3_TRUNCATE_LIFT_THRESHOLD="${EVAL3_TRUNCATE_LIFT_THRESHOLD:--30}"
+export EVAL3_TRUNCATE_BUFFER_FRAMES="${EVAL3_TRUNCATE_BUFFER_FRAMES:-60}"
+
+# v6 default: ALL 11 repos (3 old + 8 dataset_v2_* minus the primary).
+DEFAULT_EXTRA_REPOS="RobotLearningVLA/yann_lecun_1,RobotLearningVLA/barack_obama_1,RobotLearningVLA/dataset_v2_taylor_swift_left_1,RobotLearningVLA/dataset_v2_taylor_swift_middle_1,RobotLearningVLA/dataset_v2_taylor_swift_right_1,RobotLearningVLA/dataset_v2_yann_lecun_left_1,RobotLearningVLA/dataset_v2_yann_lecun_middle_1,RobotLearningVLA/dataset_v2_yann_lecun_right_1,RobotLearningVLA/dataset_v2_barack_obama_left_1,RobotLearningVLA/dataset_v2_barack_obama_middle_1,RobotLearningVLA/dataset_v2_barack_obama_right_1"
+export EVAL3_EXTRA_REPOS="${EVAL3_EXTRA_REPOS:-$DEFAULT_EXTRA_REPOS}"
 
 echo ">> Eval3 aug-train"
 echo "   dataset (primary)     : $REPO"
@@ -86,6 +96,7 @@ echo "   task_aug              : $EVAL3_TASK_AUG"
 echo "   task_aug canonical p  : $EVAL3_TASK_AUG_CANONICAL_P"
 echo "   bg_replace (p)        : $EVAL3_BG_REPLACE ($EVAL3_BG_REPLACE_P)"
 echo "   print_shuffle (p)     : $EVAL3_PRINT_SHUFFLE ($EVAL3_PRINT_SHUFFLE_P)"
+echo "   truncate_at_placement : $EVAL3_TRUNCATE_AT_PLACEMENT (grip>=$EVAL3_TRUNCATE_GRIP_THRESHOLD, lift>=$EVAL3_TRUNCATE_LIFT_THRESHOLD, buf=$EVAL3_TRUNCATE_BUFFER_FRAMES)"
 echo "   swift_episode_filter  : $EVAL3_SWIFT_EPISODE_FILTER"
 echo "   lecun_episode_filter  : $EVAL3_LECUN_EPISODE_FILTER"
 echo "   obama_episode_filter  : $EVAL3_OBAMA_EPISODE_FILTER"

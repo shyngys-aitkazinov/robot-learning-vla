@@ -293,7 +293,25 @@ def apply_concat_patch() -> None:
             lecun_filter = _parse_filter("EVAL3_LECUN_EPISODE_FILTER")
             obama_filter = _parse_filter("EVAL3_OBAMA_EPISODE_FILTER")
 
+            # Placement-truncation knobs (Rule A from the v6 plan).
+            truncate_at_placement_enabled = os.environ.get("EVAL3_TRUNCATE_AT_PLACEMENT", "1") == "1"
+            try:
+                trunc_grip = float(os.environ.get("EVAL3_TRUNCATE_GRIP_THRESHOLD", "20"))
+            except ValueError:
+                trunc_grip = 20.0
+            try:
+                trunc_lift = float(os.environ.get("EVAL3_TRUNCATE_LIFT_THRESHOLD", "-30"))
+            except ValueError:
+                trunc_lift = -30.0
+            try:
+                trunc_buffer = int(os.environ.get("EVAL3_TRUNCATE_BUFFER_FRAMES", "60"))
+            except ValueError:
+                trunc_buffer = 60
+
             def _slug_from_repo(repo: str) -> str:
+                """Map repo_id -> celebrity slug. Both old (taylor_swift_1) and new
+                (dataset_v2_taylor_swift_left_1) variants resolve correctly because
+                the substring match still hits."""
                 rl = repo.lower()
                 if "taylor_swift" in rl:
                     return "swift"
@@ -303,9 +321,16 @@ def apply_concat_patch() -> None:
                     return "obama"
                 return ""
 
+            def _is_new_data(repo: str) -> bool:
+                """True for dataset_v2_* repos. They record [home -> place -> home]
+                trajectories and need placement truncation. Old data already ends
+                at the placement pose and must NOT be truncated."""
+                return "dataset_v2" in repo.lower()
+
             prep_datasets = []
             for d in datasets:
                 slug = _slug_from_repo(d.repo_id)
+                new_data = _is_new_data(d.repo_id)
                 bg_aug = None
                 print_aug = None
                 if slug and bg_replace_enabled:
@@ -322,7 +347,15 @@ def apply_concat_patch() -> None:
                     else:
                         logging.warning("eval3_concat_patch: %s print-shuffle skipped (missing masks)", slug)
 
-                ep_filter = {"swift": swift_filter, "lecun": lecun_filter, "obama": obama_filter}.get(slug)
+                # Episode filter applies ONLY to old data — new data's value comes
+                # from its 3-position diversity, no need to drop episodes.
+                if new_data:
+                    ep_filter = None
+                else:
+                    ep_filter = {"swift": swift_filter, "lecun": lecun_filter, "obama": obama_filter}.get(slug)
+                # Placement truncation applies ONLY to new data — old data already
+                # ends at placement so truncating it would cut the place itself.
+                trunc_at_place = bool(new_data and truncate_at_placement_enabled)
                 w = Eval3PrepDataset(
                     d,
                     max_frames_per_episode=max_frames,
@@ -330,15 +363,21 @@ def apply_concat_patch() -> None:
                     bg_aug_fn=bg_aug,
                     print_aug_fn=print_aug,
                     episode_filter=ep_filter,
+                    truncate_at_placement=trunc_at_place,
+                    truncate_grip_threshold=trunc_grip,
+                    truncate_lift_threshold=trunc_lift,
+                    truncate_buffer_frames=trunc_buffer,
                 )
                 s = w.truncation_summary()
                 logging.info(
                     "eval3_concat_patch: %s  frames=%d/%d (%.1f%%)  episodes=%d/%d  "
-                    "action_stat_count=%s  task_aug=%s  bg_aug=%s  print_aug=%s  ep_filter=%s",
+                    "trunc_place=%s (match=%.0f%%, avg_kept=%.0f)  task_aug=%s  bg_aug=%s  print_aug=%s  ep_filter=%s",
                     s["repo_id"], s["kept_num_frames"], s["original_num_frames"],
                     s["kept_fraction"] * 100.0, s["kept_num_episodes"],
-                    s["original_num_episodes"], s.get("action_stat_count"), task_aug is not None,
-                    bg_aug is not None, print_aug is not None, ep_filter,
+                    s["original_num_episodes"],
+                    s["truncate_at_placement"], s["placement_match_rate"] * 100.0,
+                    s["placement_avg_kept_frames"],
+                    task_aug is not None, bg_aug is not None, print_aug is not None, ep_filter,
                 )
                 prep_datasets.append(w)
             datasets = prep_datasets

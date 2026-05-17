@@ -343,6 +343,10 @@ class Eval3PrepDataset(Dataset):
         print_aug_fn: Callable[[torch.Tensor], torch.Tensor] | None = None,
         image_key: str = "observation.images.front",
         episode_filter: list[int] | None = None,
+        truncate_at_placement: bool = False,
+        truncate_grip_threshold: float = 20.0,
+        truncate_lift_threshold: float = -30.0,
+        truncate_buffer_frames: int = 60,
     ):
         self._ds = dataset
         self._task_aug_fn = task_aug_fn
@@ -356,26 +360,58 @@ class Eval3PrepDataset(Dataset):
         from_idxs = list(ep_df["dataset_from_index"])
         to_idxs = list(ep_df["dataset_to_index"])
 
-        # Build the per-episode kept-range. If max_frames_per_episode is None or larger
-        # than the longest episode, this is a no-op (kept range == full episode).
+        # Pre-pull action column once if we need placement detection. This is
+        # column-oriented access on the HF dataset (one fetch, not per-row).
+        actions_col = None
+        if truncate_at_placement:
+            actions_col = dataset.hf_dataset["action"]
+
+        # Build the per-episode kept-range.
+        #   * truncate_at_placement: find FIRST frame with gripper>=grip_thresh AND
+        #     shoulder_lift>=lift_thresh, set cap = match_frame + buffer. Falls back
+        #     to max_frames_per_episode if no match (rare).
+        #   * otherwise: cap = f0 + max_frames_per_episode (legacy behaviour).
         # If episode_filter is provided, only include those episode indices.
         valid: list[int] = []
         original_total = 0
         keep_eps = set(int(e) for e in episode_filter) if episode_filter is not None else None
+        truncation_log: list[dict] = []
         for ep_idx, (f0, f1) in enumerate(zip(from_idxs, to_idxs)):
             f0i, f1i = int(f0), int(f1)
             original_total += f1i - f0i
             if keep_eps is not None and ep_idx not in keep_eps:
                 continue
-            if max_frames_per_episode is None:
-                cap = f1i
-            else:
-                cap = min(f0i + int(max_frames_per_episode), f1i)
+            cap = None
+            match_offset = None
+            if truncate_at_placement and actions_col is not None:
+                # Scan from start, early-exit at first match.
+                for off in range(f1i - f0i):
+                    a = actions_col[f0i + off]
+                    # Tensors may be torch.Tensor or python list depending on HF backend.
+                    grip = float(a[5])
+                    lift = float(a[1])
+                    if grip >= truncate_grip_threshold and lift >= truncate_lift_threshold:
+                        match_offset = off
+                        break
+                if match_offset is not None:
+                    cap = min(f0i + match_offset + int(truncate_buffer_frames), f1i)
+            if cap is None:
+                if max_frames_per_episode is None:
+                    cap = f1i
+                else:
+                    cap = min(f0i + int(max_frames_per_episode), f1i)
             valid.extend(range(f0i, cap))
+            truncation_log.append({
+                "ep_idx": ep_idx, "f0": f0i, "f1": f1i,
+                "kept_to": cap, "match_offset": match_offset,
+                "kept_frames": cap - f0i,
+            })
         self._valid_indices = valid
         self._max_frames_per_episode = max_frames_per_episode
         self._original_num_frames = original_total
         self._episode_filter = list(keep_eps) if keep_eps is not None else None
+        self._truncate_at_placement = truncate_at_placement
+        self._truncation_log = truncation_log
         self._kept_episode_indices = sorted(
             set(int(dataset.hf_dataset["episode_index"][i]) for i in self._valid_indices)
         )
@@ -453,9 +489,16 @@ class Eval3PrepDataset(Dataset):
     # ----- Debug helpers ---------------------------------------------------
 
     def truncation_summary(self) -> dict:
+        # Placement-truncation summary (only meaningful when truncate_at_placement=True)
+        place_matched = sum(1 for r in self._truncation_log if r.get("match_offset") is not None)
+        place_total = len(self._truncation_log)
+        place_kept_frames = sum(r["kept_frames"] for r in self._truncation_log)
         return {
             "repo_id": self.repo_id,
             "max_frames_per_episode": self._max_frames_per_episode,
+            "truncate_at_placement": self._truncate_at_placement,
+            "placement_match_rate": (place_matched / place_total) if place_total else 0.0,
+            "placement_avg_kept_frames": (place_kept_frames / place_total) if place_total else 0,
             "original_num_frames": int(self._original_num_frames),
             "kept_num_frames": int(self.num_frames),
             "dropped_num_frames": int(self._original_num_frames - self.num_frames),
