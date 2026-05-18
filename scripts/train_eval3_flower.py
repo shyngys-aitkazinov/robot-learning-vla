@@ -166,6 +166,7 @@ def make_flower_batch(batch: dict[str, Any], *, device: torch.device, stats: dic
 
 def flower_loss(model, flower_batch: dict[str, Any]) -> torch.Tensor:
     features = model.encode_observations(flower_batch)
+    _normalize_flower_conditioning(features, flower_batch)
     out = model.rf_loss(features, flower_batch["actions"])
     if isinstance(out, tuple):
         return out[0]
@@ -174,6 +175,20 @@ def flower_loss(model, flower_batch: dict[str, Any]) -> torch.Tensor:
     if torch.is_tensor(out):
         return out
     raise TypeError(f"Unsupported FlowerVLA rf_loss return type: {type(out)!r}")
+
+
+def _normalize_flower_conditioning(features: dict[str, Any], flower_batch: dict[str, Any]) -> None:
+    actions = flower_batch["actions"]
+    batch_size = int(actions.shape[0])
+    device = actions.device
+
+    frequency_embeds = features.get("frequency_embeds")
+    if torch.is_tensor(frequency_embeds) and frequency_embeds.ndim != 2:
+        features["frequency_embeds"] = frequency_embeds.reshape(batch_size, -1)
+
+    action_type = features.get("action_type")
+    if not torch.is_tensor(action_type) or action_type.ndim != 1:
+        features["action_type"] = torch.ones(batch_size, dtype=torch.long, device=device)
 
 
 def save_checkpoint(
