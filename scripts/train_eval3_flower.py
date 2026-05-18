@@ -8,6 +8,7 @@ the main LeRobot/SmolVLA `.venv`.
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import math
 import sys
@@ -47,6 +48,8 @@ def _jsonable(obj: Any) -> Any:
 
 
 def build_flower_model(args: argparse.Namespace, device: torch.device):
+    _patch_optional_flash_attn_check()
+
     if args.flower_src:
         src = Path(args.flower_src).expanduser().resolve()
         if not src.exists():
@@ -96,6 +99,45 @@ def build_flower_model(args: argparse.Namespace, device: torch.device):
         model.obs_modalities = "obs"
 
     return model.to(device)
+
+
+def _patch_optional_flash_attn_check() -> None:
+    try:
+        import transformers.dynamic_module_utils as dynamic_module_utils
+    except Exception:
+        return
+
+    original_check_imports = dynamic_module_utils.check_imports
+    if getattr(original_check_imports, "_eval3_flower_flash_attn_optional", False):
+        return
+
+    def patched_check_imports(filename):
+        try:
+            return original_check_imports(filename)
+        except ImportError as exc:
+            if "flash_attn" not in str(exc):
+                raise
+
+            missing_packages = []
+            for imp in dynamic_module_utils.get_imports(filename):
+                if imp == "flash_attn":
+                    continue
+                try:
+                    importlib.import_module(imp)
+                except ImportError:
+                    missing_packages.append(imp)
+
+            if missing_packages:
+                raise ImportError(
+                    "This modeling file requires the following packages that were not found in your environment: "
+                    f"{', '.join(missing_packages)}. Run `pip install {' '.join(missing_packages)}`"
+                ) from exc
+
+            print("FlowerVLA: treating optional flash_attn import as unavailable; using standard attention.", flush=True)
+            return dynamic_module_utils.get_relative_imports(filename)
+
+    patched_check_imports._eval3_flower_flash_attn_optional = True
+    dynamic_module_utils.check_imports = patched_check_imports
 
 
 def make_flower_batch(batch: dict[str, Any], *, device: torch.device, stats: dict[str, Any]) -> dict[str, Any]:
