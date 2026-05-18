@@ -96,6 +96,8 @@ FLOWER_SRC=external/flower_vla_calvin EVAL3_RECIPE=new_old88 \
 Flower checkpoints are written under `outputs/train/<job>/checkpoints/010000`
 through `050000`. Labels stay exact; the trainer normalizes actions/proprio for
 model scale and saves raw SO-101 inverse stats beside every checkpoint.
+The default pretrained FlowerVLA file is
+`mbreuss/flower_vla_pret/360000_model_weights.pt`.
 
 ## OpenVLA LoRA
 

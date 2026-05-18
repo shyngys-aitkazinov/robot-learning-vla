@@ -186,7 +186,7 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--output-dir", default="")
     ap.add_argument("--flower-src", default="", help="Local FlowerVLA checkout containing flower/models/flower.py")
     ap.add_argument("--pretrained-repo", default="mbreuss/flower_vla_pret")
-    ap.add_argument("--pretrained-file", default="model_weights.pt")
+    ap.add_argument("--pretrained-file", default="360000_model_weights.pt")
     ap.add_argument("--pretrained-checkpoint", default="")
     ap.add_argument("--vlm-path", default="microsoft/Florence-2-large")
     ap.add_argument("--device", default="cuda")
