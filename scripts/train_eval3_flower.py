@@ -15,6 +15,7 @@ import sys
 from contextlib import nullcontext
 from itertools import cycle
 from pathlib import Path
+from types import MethodType
 from typing import Any
 
 import torch
@@ -98,7 +99,9 @@ def build_flower_model(args: argparse.Namespace, device: torch.device):
     if getattr(model, "use_proprio", False) and not isinstance(getattr(model, "obs_modalities", None), str):
         model.obs_modalities = "obs"
 
-    return model.to(device)
+    model = model.to(device)
+    _patch_flower_proprio_device(model)
+    return model
 
 
 def _patch_optional_flash_attn_check() -> None:
@@ -138,6 +141,27 @@ def _patch_optional_flash_attn_check() -> None:
 
     patched_check_imports._eval3_flower_flash_attn_optional = True
     dynamic_module_utils.check_imports = patched_check_imports
+
+
+def _patch_flower_proprio_device(model) -> None:
+    def encode_proprio(self, proprio: torch.Tensor, action_type: torch.Tensor, output_shape) -> torch.Tensor:
+        batch_size = int(output_shape[0])
+        default_dtype = next(self.parameters()).dtype
+        device = proprio.device
+
+        if not self.use_proprio:
+            return torch.zeros(batch_size, self.dit_dim, device=device, dtype=default_dtype)
+
+        encoded_proprio = torch.zeros(batch_size, self.dit_dim, device=device, dtype=default_dtype)
+        action_type = action_type.to(device=device)
+        for action_name, action_idx in self.action_space_index.action_spaces.items():
+            mask = action_type == action_idx
+            if mask.any():
+                encoded_proprio[mask] = self.proprio_encoders[action_name](proprio[mask]).squeeze(1)
+
+        return encoded_proprio
+
+    model.encode_proprio = MethodType(encode_proprio, model)
 
 
 def make_flower_batch(batch: dict[str, Any], *, device: torch.device, stats: dict[str, Any]) -> dict[str, Any]:
