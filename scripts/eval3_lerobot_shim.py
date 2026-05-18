@@ -162,10 +162,13 @@ def apply() -> None:
     #    so their dataclass inheritance uses stub parents instead of the broken HF PretrainedConfig.
     import_utils._transformers_available = False
     try:
-        import lerobot.policies.groot.action_head.flow_matching_action_head  # noqa: F401
-        import lerobot.policies.groot.groot_n1  # noqa: F401
-        import lerobot.policies.groot.modeling_groot  # noqa: F401
-        import lerobot.policies.groot.processor_groot  # noqa: F401
+        try:
+            import lerobot.policies.groot.action_head.flow_matching_action_head  # noqa: F401
+            import lerobot.policies.groot.groot_n1  # noqa: F401
+            import lerobot.policies.groot.modeling_groot  # noqa: F401
+            import lerobot.policies.groot.processor_groot  # noqa: F401
+        except ImportError as exc:
+            logging.warning("Eval3 LeRobot shim skipped optional GROOT imports: %s", exc)
     finally:
         # 3) Restore the flag so later imports (e.g. SmolVLA's processor pipeline) work normally.
         import_utils._transformers_available = saved
