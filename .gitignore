@@ -1,6 +1,8 @@
 # Python / uv
 .venv/
+.venv_flower/
 .venv_openvla/
+.venv_openvla_train/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -17,6 +19,10 @@ outputs/
 # OpenVLA integration scratch outputs
 integrations/openvla/.scratch/
 integrations/openvla/outputs/
+
+# Local third-party checkouts used by optional external VLA trainers
+external/
+third_party/
 
 # Locally materialized LeRobot datasets and 3rd-party data dumps (see datasets/README.md).
 # Ignore everything under datasets/ except the README and the small metadata JSON

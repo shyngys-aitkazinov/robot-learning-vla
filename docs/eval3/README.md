@@ -21,6 +21,7 @@ This folder implements the **foundation plan** (scene, data regimes, recording Q
 | [task3_deploy_readiness.md](task3_deploy_readiness.md) | **Pre-flight checklist**, SmolVLA **`front`→`camera1`** workaround, rubric + hardware |
 | [hardware_eval_matrix.md](hardware_eval_matrix.md) | Structured **hardware trials** after offline checkpoint ranking (prompts, JSONL checks) |
 | [charuco_pipeline.md](charuco_pipeline.md) | **Experimental** — ChArUco fiducial boards as celebrity stand-ins for synthetic-on-real data; print/verify/compose CLIs and post-processing sketch |
+| [external_vla_runs_7_8.md](external_vla_runs_7_8.md) | FlowerVLA + OpenVLA LoRA exact-data runs for new66 and new+old88 |
 
 For **optional OpenVLA zero-shot probing** (separate `.venv_openvla`, not course-canonical deploy), see [`integrations/openvla/README.md`](../../integrations/openvla/README.md).
 

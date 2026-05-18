@@ -47,6 +47,7 @@ Use **`scripts/predict.py`** with explicit **`--unnorm-key`** only after reading
 | [`scripts/deploy_stub.py`](scripts/deploy_stub.py) | Timing-only loop over PNG folder → JSONL (no motors) |
 | [`scripts/offline_probe.py`](scripts/offline_probe.py) | Variance across prompts on many images (manifest / glob) |
 | [`scripts/http_client.py`](scripts/http_client.py) | Optional REST client for upstream `vla-scripts/deploy.py` |
+| [`scripts/train_eval3_lora.py`](scripts/train_eval3_lora.py) | Eval3 exact-data LoRA trainer for runs 7O/8O |
 
 Outputs default to **`outputs/eval3_rollouts/openvla_*.jsonl`** at repo root (same gitignore bucket as other Eval3 artifacts).
 
@@ -56,4 +57,6 @@ On a GPU server, clone [openvla/openvla](https://github.com/openvla/openvla) and
 
 ## Fine-tuning path
 
-See [`docs/finetune_future.md`](docs/finetune_future.md).
+For the current Eval3 runs 7O/8O, see
+[`docs/eval3/external_vla_runs_7_8.md`](../../docs/eval3/external_vla_runs_7_8.md).
+Older notes remain in [`docs/finetune_future.md`](docs/finetune_future.md).
