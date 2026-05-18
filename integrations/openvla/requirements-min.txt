@@ -1,0 +1,14 @@
+# Minimal inference deps mirrored from upstream OpenVLA:
+# https://github.com/openvla/openvla/blob/main/requirements-min.txt
+# Install PyTorch separately for your platform (CUDA/MPS/CPU): https://pytorch.org/get-started/locally/
+timm==0.9.10
+tokenizers==0.19.1
+torch>=2.2.0
+torchvision>=0.17.0
+transformers==4.40.1
+
+# Helpers used by integrations/openvla/scripts/*
+pillow>=10.0.0
+numpy>=1.26.0
+accelerate>=0.27.0
+safetensors>=0.4.0

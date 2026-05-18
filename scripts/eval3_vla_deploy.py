@@ -100,6 +100,47 @@ def _float_mapping(mapping: dict | None) -> dict[str, float] | None:
     return out
 
 
+def _apply_action_guards(
+    raw_action: dict[str, float],
+    previous_action: dict[str, float] | None,
+    *,
+    smoothing_alpha: float,
+    max_action_delta_deg: float,
+    gripper_open_bias_deg: float,
+    gripper_open_bias_threshold_deg: float,
+) -> dict[str, float]:
+    """Apply optional deploy-time action smoothing without hiding raw logs.
+
+    ``smoothing_alpha`` is the weight assigned to the previous command. A value
+    of 0.25 means 75% current target + 25% previous target. ``max_action_delta``
+    clamps the per-tick change after smoothing; 0 disables it. Gripper open
+    bias is intentionally thresholded so a positive bias cannot turn a close
+    command into a weak half-open grasp.
+    """
+    guarded: dict[str, float] = {}
+    for key, raw_value in raw_action.items():
+        target = float(raw_value)
+        is_gripper = "gripper" in key.lower()
+        if (
+            gripper_open_bias_deg
+            and is_gripper
+            and target >= float(gripper_open_bias_threshold_deg)
+        ):
+            target += float(gripper_open_bias_deg)
+
+        if previous_action is not None and key in previous_action and smoothing_alpha > 0:
+            prev = float(previous_action[key])
+            target = float(smoothing_alpha) * prev + (1.0 - float(smoothing_alpha)) * target
+
+        if previous_action is not None and key in previous_action and max_action_delta_deg > 0:
+            prev = float(previous_action[key])
+            delta = float(max_action_delta_deg)
+            target = min(max(target, prev - delta), prev + delta)
+
+        guarded[key] = target
+    return guarded
+
+
 def _pretrained_file(policy_path: str, filename: str) -> str | None:
     local = Path(policy_path)
     if local.exists():
@@ -153,11 +194,18 @@ class Eval3VLADeployConfig:
     # Hub repo whose meta matches training (observation keys + stats).
     dataset_repo_id: str = "RobotLearningVLA/taylor_swift_1"
     task: str = ""
+    target_slot: str = ""
     episode_time_s: float = 20.0
     fps: int = 30
     display_data: bool = False
-    rename_map: dict[str, str] = field(default_factory=dict)
+    rename_map: dict[str, str] = field(
+        default_factory=lambda: {"observation.images.front": "observation.images.camera1"}
+    )
     interpolation_multiplier: int = 1
+    action_smoothing_alpha: float = 0.0
+    max_action_delta_deg: float = 0.0
+    gripper_open_bias_deg: float = 0.0
+    gripper_open_bias_threshold_deg: float = 20.0
     dry_run: bool = False
     play_sounds: bool = False
     rollout_log_dir: str = "outputs/eval3_rollouts"
@@ -170,6 +218,11 @@ class Eval3VLADeployConfig:
         cli_overrides = parser.get_cli_overrides("policy")
         self.policy = PreTrainedConfig.from_pretrained(policy_path, cli_overrides=cli_overrides)
         self.policy.pretrained_path = policy_path
+        if self.target_slot.strip():
+            slot = self.target_slot.strip().lower()
+            if slot not in {"left", "middle", "right"}:
+                raise ValueError("--target_slot must be one of left, middle, right.")
+            self.task = f"Place the coke on the {slot} print"
         if not self.task.strip():
             print(
                 "Enter Eval 3 instruction (e.g. 'Place the coke on Taylor Swift'), then press Enter:",
@@ -204,6 +257,10 @@ def _deploy_loop(
     events: dict,
     interpolator: ActionInterpolator | None,
     single_task: str,
+    action_smoothing_alpha: float,
+    max_action_delta_deg: float,
+    gripper_open_bias_deg: float,
+    gripper_open_bias_threshold_deg: float,
     display_compressed_images: bool = False,
     rollout_log_path: Path | None = None,
     rollout_header: dict | None = None,
@@ -218,6 +275,7 @@ def _deploy_loop(
     use_interpolation = interpolator is not None and interpolator.enabled
     control_interval = interpolator.get_control_interval(fps) if interpolator else 1.0 / fps
     action_keys = sorted(robot.action_features) if use_interpolation else []
+    previous_guarded_action: dict[str, float] | None = None
 
     log_file = None
     first_frame_path = None
@@ -259,6 +317,7 @@ def _deploy_loop(
             is_record_frame = True
             policy_action_raw = None
             policy_action_processed = None
+            policy_action_guarded = None
 
             if use_interpolation:
                 ran_inference = False
@@ -274,10 +333,20 @@ def _deploy_loop(
                         robot_type=robot.robot_type,
                     )
                     act_processed_policy = make_robot_action(action_values, ds_features)
-                    robot_action_to_send = robot_action_processor((act_processed_policy, obs))
+                    robot_action_policy = robot_action_processor((act_processed_policy, obs))
                     policy_action_raw = _to_float_list(action_values)
-                    policy_action_processed = _float_mapping(robot_action_to_send)
-                    action_tensor = torch.tensor([robot_action_to_send[k] for k in action_keys])
+                    policy_action_processed = _float_mapping(robot_action_policy)
+                    robot_action_guarded = _apply_action_guards(
+                        robot_action_policy,
+                        previous_guarded_action,
+                        smoothing_alpha=action_smoothing_alpha,
+                        max_action_delta_deg=max_action_delta_deg,
+                        gripper_open_bias_deg=gripper_open_bias_deg,
+                        gripper_open_bias_threshold_deg=gripper_open_bias_threshold_deg,
+                    )
+                    previous_guarded_action = robot_action_guarded
+                    policy_action_guarded = _float_mapping(robot_action_guarded)
+                    action_tensor = torch.tensor([robot_action_guarded[k] for k in action_keys])
                     interpolator.add(action_tensor)
                     ran_inference = True
                 interp_action = interpolator.get()
@@ -299,9 +368,19 @@ def _deploy_loop(
                     robot_type=robot.robot_type,
                 )
                 act_processed_policy = make_robot_action(action_values, ds_features)
-                robot_action_to_send = robot_action_processor((act_processed_policy, obs))
+                robot_action_policy = robot_action_processor((act_processed_policy, obs))
                 policy_action_raw = _to_float_list(action_values)
-                policy_action_processed = _float_mapping(robot_action_to_send)
+                policy_action_processed = _float_mapping(robot_action_policy)
+                robot_action_to_send = _apply_action_guards(
+                    robot_action_policy,
+                    previous_guarded_action,
+                    smoothing_alpha=action_smoothing_alpha,
+                    max_action_delta_deg=max_action_delta_deg,
+                    gripper_open_bias_deg=gripper_open_bias_deg,
+                    gripper_open_bias_threshold_deg=gripper_open_bias_threshold_deg,
+                )
+                previous_guarded_action = robot_action_to_send
+                policy_action_guarded = _float_mapping(robot_action_to_send)
                 action_values = robot_action_to_send
 
             robot.send_action(robot_action_to_send)
@@ -334,6 +413,7 @@ def _deploy_loop(
                             "joint_keys": action_keys_out,
                             "policy_action_raw": policy_action_raw,
                             "policy_action_processed": policy_action_processed,
+                            "policy_action_guarded": policy_action_guarded,
                             "sent_action": _float_mapping(robot_action_to_send),
                             # Backward-compatible field consumed by older audit helpers.
                             "action": [float(robot_action_to_send[k]) for k in action_keys_out],
@@ -367,6 +447,25 @@ def eval3_vla_deploy(cfg: Eval3VLADeployConfig) -> None:
     )
 
     assert cfg.policy is not None
+    if not 0.0 <= cfg.action_smoothing_alpha < 1.0:
+        raise ValueError("--action_smoothing_alpha must be in [0, 1).")
+    if cfg.max_action_delta_deg < 0:
+        raise ValueError("--max_action_delta_deg must be >= 0; use 0 to disable.")
+    if cfg.gripper_open_bias_threshold_deg < 0:
+        raise ValueError("--gripper_open_bias_threshold_deg must be >= 0.")
+    if cfg.rename_map.get("observation.images.front") != "observation.images.camera1":
+        logging.warning(
+            "Eval3 single-camera deploy normally requires "
+            "--rename_map='{\"observation.images.front\":\"observation.images.camera1\"}'. "
+            "Current rename_map=%s",
+            cfg.rename_map,
+        )
+    empty_cameras = getattr(cfg.policy, "empty_cameras", None)
+    if empty_cameras != 2:
+        logging.warning(
+            "Eval3 SmolVLA single-camera checkpoints should use policy.empty_cameras=2; got %r.",
+            empty_cameras,
+        )
 
     ds_meta = LeRobotDatasetMetadata(cfg.dataset_repo_id)
     ds_features = ds_meta.features
@@ -406,6 +505,7 @@ def eval3_vla_deploy(cfg: Eval3VLADeployConfig) -> None:
         stats_counts = _checkpoint_stats_counts(str(cfg.policy.pretrained_path))
         rollout_header = {
             "instruction": cfg.task,
+            "target_slot": cfg.target_slot,
             "episode_time_s": cfg.episode_time_s,
             "fps": cfg.fps,
             "policy_path": str(cfg.policy.pretrained_path),
@@ -413,6 +513,11 @@ def eval3_vla_deploy(cfg: Eval3VLADeployConfig) -> None:
             "checkpoint_stats_count": stats_counts,
             "dataset_repo_id": cfg.dataset_repo_id,
             "rename_map": cfg.rename_map,
+            "interpolation_multiplier": cfg.interpolation_multiplier,
+            "action_smoothing_alpha": cfg.action_smoothing_alpha,
+            "max_action_delta_deg": cfg.max_action_delta_deg,
+            "gripper_open_bias_deg": cfg.gripper_open_bias_deg,
+            "gripper_open_bias_threshold_deg": cfg.gripper_open_bias_threshold_deg,
             "robot_type": getattr(cfg.robot, "type", None),
             "robot_id": getattr(cfg.robot, "id", None),
             "policy_device": str(cfg.policy.device),
@@ -441,6 +546,10 @@ def eval3_vla_deploy(cfg: Eval3VLADeployConfig) -> None:
             events=events,
             interpolator=interpolator,
             single_task=cfg.task,
+            action_smoothing_alpha=cfg.action_smoothing_alpha,
+            max_action_delta_deg=cfg.max_action_delta_deg,
+            gripper_open_bias_deg=cfg.gripper_open_bias_deg,
+            gripper_open_bias_threshold_deg=cfg.gripper_open_bias_threshold_deg,
             display_compressed_images=False,
             rollout_log_path=rollout_log_path,
             rollout_header=rollout_header,

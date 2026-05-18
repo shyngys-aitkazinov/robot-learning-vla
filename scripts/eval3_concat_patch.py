@@ -250,6 +250,9 @@ def apply_concat_patch() -> None:
         #   EVAL3_PRINT_SHUFFLE_P=0.5
         #   EVAL3_MASK_DIR=outputs/eval3_masks
         #   EVAL3_BG_DIR=outputs/eval3_backgrounds
+        #   EVAL3_GRIPPER_REPAIR=1         # widen dataset_v2 open-gripper labels
+        #   EVAL3_ACTION_SMOOTH_WINDOW=3   # low-pass arm labels, gripper excluded
+        #   EVAL3_SLOT_TASK_AUG=1          # optional selector->slot policy training
         #   EVAL3_SWIFT_EPISODE_FILTER=0,4,7,8,9,10,11,12,14,15,16,17,18,19
         try:
             from eval3_dataset_prep import (
@@ -257,6 +260,7 @@ def apply_concat_patch() -> None:
                 BackgroundReplaceAugmenter,
                 PrintShuffleAugmenter,
                 make_task_augmenter,
+                make_slot_task_augmenter,
             )
         except ImportError as e:
             logging.warning("eval3_concat_patch: could not import eval3_dataset_prep (%s); "
@@ -283,6 +287,28 @@ def apply_concat_patch() -> None:
                 ps_p = 0.5
             mask_dir = os.environ.get("EVAL3_MASK_DIR", "outputs/eval3_masks")
             bg_dir = os.environ.get("EVAL3_BG_DIR", "outputs/eval3_backgrounds")
+
+            gripper_repair_enabled = os.environ.get("EVAL3_GRIPPER_REPAIR", "1") == "1"
+            gripper_repair_new_only = os.environ.get("EVAL3_GRIPPER_REPAIR_NEW_DATA_ONLY", "1") == "1"
+            try:
+                gripper_open_target = float(os.environ.get("EVAL3_GRIPPER_OPEN_TARGET", "55"))
+            except ValueError:
+                gripper_open_target = 55.0
+            try:
+                gripper_open_threshold = float(os.environ.get("EVAL3_GRIPPER_OPEN_THRESHOLD", "20"))
+            except ValueError:
+                gripper_open_threshold = 20.0
+            try:
+                action_smooth_window = int(os.environ.get("EVAL3_ACTION_SMOOTH_WINDOW", "0"))
+            except ValueError:
+                action_smooth_window = 0
+            action_smooth_gripper = os.environ.get("EVAL3_ACTION_SMOOTH_GRIPPER", "0") == "1"
+            slot_task_enabled = os.environ.get("EVAL3_SLOT_TASK_AUG", "0") == "1"
+            try:
+                slot_task_p = float(os.environ.get("EVAL3_SLOT_TASK_P", "0.5"))
+            except ValueError:
+                slot_task_p = 0.5
+
             def _parse_filter(env_var: str) -> list[int] | None:
                 raw = os.environ.get(env_var, "").strip()
                 if not raw:
@@ -363,10 +389,18 @@ def apply_concat_patch() -> None:
             def _repo_name(repo: str) -> str:
                 return repo.rsplit("/", 1)[-1]
 
+            def _slot_from_repo(repo: str) -> str:
+                name = _repo_name(repo).lower()
+                for slot in ("left", "middle", "right"):
+                    if f"_{slot}_" in name or name.endswith(f"_{slot}"):
+                        return slot
+                return ""
+
             prep_datasets = []
             for d in datasets:
                 slug = _slug_from_repo(d.repo_id)
                 new_data = _is_new_data(d.repo_id)
+                slot = _slot_from_repo(d.repo_id) if new_data else ""
                 bg_aug = None
                 print_aug = None
                 if slug and bg_replace_enabled:
@@ -411,10 +445,21 @@ def apply_concat_patch() -> None:
                     over_cap_episodes.get(_repo_name(d.repo_id), set())
                     | over_cap_episodes.get(d.repo_id, set())
                 )
+                ds_task_aug = task_aug
+                if slot_task_enabled and slot:
+                    ds_task_aug = make_slot_task_augmenter(
+                        slot=slot,
+                        base_aug=task_aug,
+                        slot_p=slot_task_p,
+                        seed=(hash(d.repo_id) & 0xFFFF),
+                    )
+                repair_this_gripper = bool(
+                    gripper_repair_enabled and (new_data or not gripper_repair_new_only)
+                )
                 w = Eval3PrepDataset(
                     d,
                     max_frames_per_episode=max_frames,
-                    task_aug_fn=task_aug,
+                    task_aug_fn=ds_task_aug,
                     bg_aug_fn=bg_aug,
                     print_aug_fn=print_aug,
                     episode_filter=ep_filter,
@@ -425,19 +470,28 @@ def apply_concat_patch() -> None:
                     truncate_grip_threshold=trunc_grip,
                     truncate_lift_threshold=trunc_lift,
                     truncate_buffer_frames=trunc_buffer,
+                    repair_gripper_open=repair_this_gripper,
+                    gripper_open_target=gripper_open_target,
+                    gripper_open_threshold=gripper_open_threshold,
+                    action_smooth_window=action_smooth_window,
+                    action_smooth_gripper=action_smooth_gripper,
                 )
                 s = w.truncation_summary()
                 logging.info(
                     "eval3_concat_patch: %s  frames=%d/%d (%.1f%%)  episodes=%d/%d  "
                     "trunc_place=%s mode=%s (match=%.0f%%, avg_kept=%.0f)  "
-                    "task_aug=%s  bg_aug=%s  print_aug=%s  ep_filter=%s",
+                    "grip_repair=%s(changed=%d) smooth_w=%d(changed=%d) "
+                    "task_aug=%s slot=%s  bg_aug=%s  print_aug=%s  ep_filter=%s",
                     s["repo_id"], s["kept_num_frames"], s["original_num_frames"],
                     s["kept_fraction"] * 100.0, s["kept_num_episodes"],
                     s["original_num_episodes"],
                     s["truncate_at_placement"], s["truncate_placement_mode"],
                     s["placement_match_rate"] * 100.0,
                     s["placement_avg_kept_frames"],
-                    task_aug is not None, bg_aug is not None, print_aug is not None, ep_filter,
+                    s["gripper_repair_enabled"], s["gripper_repair_changed_frames"],
+                    s["action_smooth_window"], s["action_smooth_changed_frames"],
+                    ds_task_aug is not None, slot or "none", bg_aug is not None,
+                    print_aug is not None, ep_filter,
                 )
                 prep_datasets.append(w)
             datasets = prep_datasets

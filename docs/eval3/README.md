@@ -19,7 +19,10 @@ This folder implements the **foundation plan** (scene, data regimes, recording Q
 | [train_regimes.md](train_regimes.md) | Phased training A→B→C + confusion auditing |
 | [rollout.md](rollout.md) | Demo-day CLI contract + robot wiring notes |
 | [task3_deploy_readiness.md](task3_deploy_readiness.md) | **Pre-flight checklist**, SmolVLA **`front`→`camera1`** workaround, rubric + hardware |
+| [hardware_eval_matrix.md](hardware_eval_matrix.md) | Structured **hardware trials** after offline checkpoint ranking (prompts, JSONL checks) |
 | [charuco_pipeline.md](charuco_pipeline.md) | **Experimental** — ChArUco fiducial boards as celebrity stand-ins for synthetic-on-real data; print/verify/compose CLIs and post-processing sketch |
+
+For **optional OpenVLA zero-shot probing** (separate `.venv_openvla`, not course-canonical deploy), see [`integrations/openvla/README.md`](../../integrations/openvla/README.md).
 
 ## Repo scripts / tools
 
@@ -45,6 +48,11 @@ python tools/count_inference_params.py --checkpoint outputs/eval3_bc_overfit/bes
 # SmolVLA / single-camera compatibility (prints rename_map + empty_cameras suggestion)
 python tools/eval3_smolvla_compat.py
 
+# Offline checkpoint ranking (Train v7 A/B/C/D) + gripper demo audit + deploy flag printer
+chmod +x scripts/run_eval3_v7_checkpoint_sweeps.sh
+./scripts/run_eval3_v7_checkpoint_sweeps.sh   # writes outputs/eval3_analysis/sweep_v7_*.md
+python tools/eval3_audit_gripper_opens.py --revision v3.0
+python tools/eval3_deploy_flags_from_checkpoint.py outputs/train/<job>/checkpoints/<STEP>/pretrained_model
 # Inspect tasks vs Eval 3 prompt prefix
 python tools/inspect_lerobot_dataset.py --eval3-task-prefix "Place the coke on"
 

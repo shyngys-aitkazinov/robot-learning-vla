@@ -10,6 +10,12 @@ LeRobotDataset BEFORE it gets concatenated and fed to lerobot-train:
    * Optionally rewrites ``row["task"]`` on the fly using ``task_aug_fn`` so the
      SmolVLA tokenizer sees varied prompt strings (the canonical demo prompts
      drop the ``"the"`` prefix that the recordings always include).
+   * Optionally repairs dataset_v2 gripper-open labels before training. The v2
+     truncated datasets have open-gripper q90/q99 values below the deployment
+     target; lifting only already-open commands preserves close/grasp labels
+     while teaching the policy a wider pre-grasp/release aperture.
+   * Optionally applies a small centered moving average to arm-action labels
+     (not the gripper by default) to reduce learned high-frequency shake.
 
 2. ``make_task_augmenter`` — returns a random task-string mutator. Variations
    are weighted toward the canonical demo wording (drop ``"the"``) since that
@@ -46,6 +52,7 @@ from torch.utils.data import Dataset
 # we know which celebrity to augment around. Any task string without a known
 # celebrity name is passed through unchanged (defensive).
 KNOWN_CELEBRITIES = ("Taylor Swift", "Yann LeCun", "Barack Obama")
+SLOT_NAMES = ("left", "middle", "right")
 
 
 class TaskAugmenter:
@@ -98,6 +105,57 @@ def make_task_augmenter(seed: int = 42, canonical_p: float | None = None) -> "Ta
     return TaskAugmenter(seed=seed, canonical_p=canonical_p)
 
 
+class SlotTaskAugmenter:
+    """Picklable task mutator for slot-conditioned policy runs.
+
+    This is the policy side of the target-selector design: an external
+    selector/classifier decides which physical print slot matches the celebrity
+    prompt, then the motor policy receives a spatial instruction such as
+    ``"Place the coke on the left print"``. ``slot_p`` lets a retrain mix slot
+    prompts with the original celebrity prompts instead of committing fully.
+    """
+
+    def __init__(
+        self,
+        slot: str,
+        base_aug: Callable[[str], str] | None = None,
+        slot_p: float = 0.5,
+        seed: int = 42,
+    ):
+        slot = str(slot).strip().lower()
+        if slot not in SLOT_NAMES:
+            raise ValueError(f"slot must be one of {SLOT_NAMES}, got {slot!r}")
+        self._slot = slot
+        self._base_aug = base_aug
+        self._slot_p = min(max(float(slot_p), 0.0), 1.0)
+        self._seed = int(seed)
+        self._rng = random.Random(seed)
+
+    def __call__(self, task: str) -> str:
+        if self._rng.random() < self._slot_p:
+            variants = (
+                f"Place the coke on the {self._slot} print",
+                f"Place the coke on the {self._slot} target",
+                f"Place the coke on the {self._slot}",
+            )
+            return variants[self._rng.randrange(len(variants))]
+        if self._base_aug is not None:
+            return self._base_aug(task)
+        return task
+
+    def __reduce__(self):
+        return (self.__class__, (self._slot, self._base_aug, self._slot_p, self._seed))
+
+
+def make_slot_task_augmenter(
+    slot: str,
+    base_aug: Callable[[str], str] | None = None,
+    slot_p: float = 0.5,
+    seed: int = 42,
+) -> "SlotTaskAugmenter":
+    return SlotTaskAugmenter(slot=slot, base_aug=base_aug, slot_p=slot_p, seed=seed)
+
+
 def _stat_tensor(
     values: torch.Tensor,
     source_stat: dict | None = None,
@@ -140,12 +198,16 @@ def _stat_tensor(
 
 def _column_values_to_tensor(values: list[Any]) -> torch.Tensor:
     """Convert a HF Dataset column slice to a float tensor without decoding videos."""
-    if values and isinstance(values[0], torch.Tensor):
-        return torch.stack([v.detach().float() for v in values])
+    if values and any(isinstance(v, torch.Tensor) for v in values):
+        return torch.stack([torch.as_tensor(v).detach().float() for v in values])
     return torch.as_tensor(values, dtype=torch.float32)
 
 
-def _compute_filtered_stats(dataset, valid_indices: list[int]) -> dict[str, dict[str, torch.Tensor]]:
+def _compute_filtered_stats(
+    dataset,
+    valid_indices: list[int],
+    action_overrides: dict[int, torch.Tensor] | None = None,
+) -> dict[str, dict[str, torch.Tensor]]:
     """Recompute non-visual metadata stats for the filtered frame subset."""
     hf = dataset.hf_dataset
     stats = deepcopy(dataset.meta.stats)
@@ -167,11 +229,132 @@ def _compute_filtered_stats(dataset, valid_indices: list[int]) -> dict[str, dict
         if key not in column_names or key not in stats:
             continue
         col = hf[key]
-        values = [col[i] for i in valid_indices]
+        if key == "action" and action_overrides:
+            values = [action_overrides.get(int(i), col[i]) for i in valid_indices]
+        else:
+            values = [col[i] for i in valid_indices]
         if not values:
             continue
         stats[key] = _stat_tensor(_column_values_to_tensor(values), stats.get(key))
     return stats
+
+
+def _feature_names(dataset, key: str) -> list[str]:
+    feature = dataset.meta.features.get(key) or {}
+    names = feature.get("names") if isinstance(feature, dict) else getattr(feature, "names", None)
+    return list(names or [])
+
+
+def _joint_index(dataset, key: str, joint_name: str, fallback: int) -> int:
+    for idx, name in enumerate(_feature_names(dataset, key)):
+        normalized = str(name).lower().removesuffix(".pos")
+        if normalized == joint_name.lower():
+            return idx
+    return int(fallback)
+
+
+def _value_to_numpy(value: Any) -> np.ndarray:
+    if isinstance(value, torch.Tensor):
+        return value.detach().cpu().numpy().astype(np.float32)
+    return np.asarray(value, dtype=np.float32)
+
+
+def _centered_moving_average(values: np.ndarray, window: int, dims: list[int]) -> np.ndarray:
+    window = int(window)
+    if window <= 1 or not dims or values.shape[0] <= 1:
+        return values
+    if window % 2 == 0:
+        window += 1
+    window = min(window, values.shape[0] if values.shape[0] % 2 == 1 else max(1, values.shape[0] - 1))
+    if window <= 1:
+        return values
+
+    out = values.copy()
+    left = window // 2
+    right = window - 1 - left
+    kernel = np.ones(window, dtype=np.float32) / float(window)
+    for dim in dims:
+        padded = np.pad(values[:, dim], (left, right), mode="edge")
+        out[:, dim] = np.convolve(padded, kernel, mode="valid")
+    return out
+
+
+def _build_action_overrides(
+    dataset,
+    truncation_log: list[dict],
+    *,
+    repair_gripper_open: bool,
+    gripper_open_target: float,
+    gripper_open_threshold: float,
+    action_smooth_window: int,
+    action_smooth_gripper: bool,
+) -> tuple[dict[int, torch.Tensor], dict[str, Any]]:
+    """Precompute per-frame repaired action labels and a compact summary."""
+    action_smooth_window = int(action_smooth_window or 0)
+    if not repair_gripper_open and action_smooth_window <= 1:
+        return {}, {
+            "gripper_repair_enabled": False,
+            "gripper_repair_changed_frames": 0,
+            "action_smooth_window": 0,
+            "action_smooth_changed_frames": 0,
+            "action_override_frames": 0,
+        }
+
+    actions_col = dataset.hf_dataset["action"]
+    sample = _value_to_numpy(actions_col[0]).reshape(-1)
+    action_dim = int(sample.shape[0])
+    gripper_idx = _joint_index(dataset, "action", "gripper", action_dim - 1)
+    smooth_dims = list(range(action_dim))
+    if not action_smooth_gripper and gripper_idx in smooth_dims:
+        smooth_dims.remove(gripper_idx)
+
+    overrides: dict[int, torch.Tensor] = {}
+    repair_changed = 0
+    smooth_changed = 0
+    total_frames = 0
+
+    for record in truncation_log:
+        f0 = int(record["f0"])
+        kept_to = int(record["kept_to"])
+        if kept_to <= f0:
+            continue
+        indices = list(range(f0, kept_to))
+        original = np.stack([_value_to_numpy(actions_col[i]).reshape(-1) for i in indices]).astype(np.float32)
+        repaired = original.copy()
+        total_frames += len(indices)
+
+        if repair_gripper_open:
+            before = repaired[:, gripper_idx].copy()
+            open_mask = before >= float(gripper_open_threshold)
+            repaired[open_mask, gripper_idx] = np.maximum(
+                repaired[open_mask, gripper_idx],
+                float(gripper_open_target),
+            )
+            repair_changed += int(np.count_nonzero(np.abs(repaired[:, gripper_idx] - before) > 1e-6))
+
+        if action_smooth_window > 1 and smooth_dims:
+            before = repaired.copy()
+            repaired = _centered_moving_average(repaired, action_smooth_window, smooth_dims)
+            smooth_changed += int(np.count_nonzero(np.linalg.norm(repaired - before, axis=1) > 1e-6))
+
+        changed = np.linalg.norm(repaired - original, axis=1) > 1e-6
+        for idx, action, did_change in zip(indices, repaired, changed):
+            if did_change:
+                overrides[int(idx)] = torch.as_tensor(action, dtype=torch.float32)
+
+    return overrides, {
+        "gripper_repair_enabled": bool(repair_gripper_open),
+        "gripper_repair_open_target": float(gripper_open_target),
+        "gripper_repair_open_threshold": float(gripper_open_threshold),
+        "gripper_repair_changed_frames": int(repair_changed),
+        "gripper_repair_changed_fraction": (float(repair_changed) / float(total_frames)) if total_frames else 0.0,
+        "action_smooth_window": int(action_smooth_window if action_smooth_window > 1 else 0),
+        "action_smooth_gripper": bool(action_smooth_gripper),
+        "action_smooth_changed_frames": int(smooth_changed),
+        "action_smooth_changed_fraction": (float(smooth_changed) / float(total_frames)) if total_frames else 0.0,
+        "action_override_frames": int(len(overrides)),
+        "action_override_fraction": (float(len(overrides)) / float(total_frames)) if total_frames else 0.0,
+    }
 
 
 # ----------------------------------------------------------------------------
@@ -332,6 +515,14 @@ class Eval3PrepDataset(Dataset):
         episode. ``None`` disables truncation (equivalent to passing a huge number).
     task_aug_fn : Callable[[str], str] | None
         If provided, called on each row's ``task`` string before return.
+    repair_gripper_open : bool
+        If true, every action whose original gripper command is already above
+        ``gripper_open_threshold`` is lifted to at least
+        ``gripper_open_target``. Closed/grasp commands below the threshold are
+        left unchanged.
+    action_smooth_window : int
+        If >1, centered moving-average window for action labels. The gripper is
+        excluded unless ``action_smooth_gripper=True``.
     """
 
     def __init__(
@@ -350,6 +541,11 @@ class Eval3PrepDataset(Dataset):
         truncate_grip_threshold: float = 20.0,
         truncate_lift_threshold: float = -30.0,
         truncate_buffer_frames: int = 60,
+        repair_gripper_open: bool = False,
+        gripper_open_target: float = 55.0,
+        gripper_open_threshold: float = 20.0,
+        action_smooth_window: int = 0,
+        action_smooth_gripper: bool = False,
     ):
         self._ds = dataset
         self._task_aug_fn = task_aug_fn
@@ -362,11 +558,16 @@ class Eval3PrepDataset(Dataset):
         ep_df = dataset.meta.episodes
         from_idxs = list(ep_df["dataset_from_index"])
         to_idxs = list(ep_df["dataset_to_index"])
+        self._episode_from_idxs = [int(x) for x in from_idxs]
+        self._episode_to_idxs = [int(x) for x in to_idxs]
+        self._episode_index_by_frame = [int(x) for x in dataset.hf_dataset["episode_index"]]
+        self._action_delta_indices = self._get_action_delta_indices(dataset)
 
         # Pre-pull action column once if we need placement detection. This is
         # column-oriented access on the HF dataset (one fetch, not per-row).
         actions_col = None
-        if truncate_at_placement:
+        needs_actions = bool(truncate_at_placement or repair_gripper_open or int(action_smooth_window or 0) > 1)
+        if needs_actions:
             actions_col = dataset.hf_dataset["action"]
 
         placement_mode = str(truncate_placement_mode or "first").strip().lower()
@@ -444,8 +645,21 @@ class Eval3PrepDataset(Dataset):
         self._kept_episode_indices = sorted(
             set(int(dataset.hf_dataset["episode_index"][i]) for i in self._valid_indices)
         )
+        self._action_overrides, self._action_repair_summary = _build_action_overrides(
+            dataset,
+            self._truncation_log,
+            repair_gripper_open=bool(repair_gripper_open),
+            gripper_open_target=float(gripper_open_target),
+            gripper_open_threshold=float(gripper_open_threshold),
+            action_smooth_window=int(action_smooth_window or 0),
+            action_smooth_gripper=bool(action_smooth_gripper),
+        )
         self._meta = deepcopy(dataset.meta)
-        self._meta.stats = _compute_filtered_stats(dataset, self._valid_indices)
+        self._meta.stats = _compute_filtered_stats(
+            dataset,
+            self._valid_indices,
+            action_overrides=self._action_overrides,
+        )
 
     # ----- Trainer-required attributes ------------------------------------
 
@@ -480,10 +694,57 @@ class Eval3PrepDataset(Dataset):
     def __len__(self) -> int:
         return len(self._valid_indices)
 
+    def _get_action_delta_indices(self, dataset) -> list[int] | None:
+        delta_timestamps = getattr(dataset, "delta_timestamps", None)
+        if not isinstance(delta_timestamps, dict) or "action" not in delta_timestamps:
+            return None
+        fps = float(getattr(dataset.meta, "fps", 30) or 30)
+        return [int(round(float(ts) * fps)) for ts in delta_timestamps["action"]]
+
+    def _apply_action_overrides(self, original_idx: int, current_action):
+        if not self._action_overrides or current_action is None:
+            return current_action
+
+        was_tensor = isinstance(current_action, torch.Tensor)
+        action_t = current_action if was_tensor else torch.as_tensor(current_action)
+        if action_t.ndim == 0:
+            return current_action
+
+        def _cast_override(override: torch.Tensor) -> torch.Tensor:
+            return override.to(dtype=action_t.dtype, device=action_t.device)
+
+        if action_t.ndim == 1:
+            override = self._action_overrides.get(int(original_idx))
+            if override is None:
+                return current_action
+            repaired = _cast_override(override)
+            return repaired if was_tensor else repaired.detach().cpu().tolist()
+
+        repaired = action_t.clone()
+        deltas = self._action_delta_indices
+        if deltas is None or len(deltas) != repaired.shape[0]:
+            deltas = list(range(int(repaired.shape[0])))
+
+        ep_idx = self._episode_index_by_frame[int(original_idx)]
+        ep_start = self._episode_from_idxs[ep_idx]
+        ep_end = self._episode_to_idxs[ep_idx]
+        for step_idx, delta in enumerate(deltas[: repaired.shape[0]]):
+            query_idx = max(ep_start, min(ep_end - 1, int(original_idx) + int(delta)))
+            override = self._action_overrides.get(int(query_idx))
+            if override is not None:
+                repaired[step_idx, : override.shape[-1]] = _cast_override(override)
+
+        return repaired if was_tensor else repaired.detach().cpu().tolist()
+
     def __getitem__(self, idx) -> Any:
         original_idx = self._valid_indices[int(idx)]
         row = self._ds[original_idx]
         mutated = False
+        if self._action_overrides and "action" in row:
+            if not mutated:
+                row = dict(row)
+                mutated = True
+            row["action"] = self._apply_action_overrides(int(original_idx), row["action"])
         if self._task_aug_fn is not None and "task" in row:
             if not mutated:
                 row = dict(row)
@@ -537,6 +798,7 @@ class Eval3PrepDataset(Dataset):
             "original_num_episodes": int(self._ds.num_episodes),
             "kept_num_episodes": int(self.num_episodes),
             "kept_episode_indices": list(self._kept_episode_indices),
+            **self._action_repair_summary,
             "action_stat_count": float(torch.as_tensor(self.meta.stats["action"]["count"]).flatten()[0])
             if "action" in self.meta.stats and "count" in self.meta.stats["action"]
             else None,

@@ -7,7 +7,12 @@
 #     Driven by EVAL3_TASK_AUG (default 1). The recordings carry "Place the coke on
 #     the <X>" but demo prompts will be "Place the coke on <X>". This layer mixes
 #     80% canonical demo wording with 20% original recorded wording by default.
-#   * Layer 3 (augmentation): torchvision image transforms — brightness/contrast/
+#   * Layer 3 (preprocessing): dataset_v2 gripper-open label repair. Commands that
+#     are already "open" (>=20 deg) are lifted to >=55 deg so the policy learns a
+#     wide pre-grasp/release aperture instead of the low v2 truncated q90/q99.
+#   * Layer 4 (preprocessing): small arm-label low-pass smoothing. The gripper is
+#     excluded so grasp/release timing remains crisp.
+#   * Layer 5 (augmentation): torchvision image transforms — brightness/contrast/
 #     saturation/hue/sharpness/affine. Brightness + contrast are weighted 2x because
 #     they're the strongest defence against the LeCun↔Obama spurious lighting cue
 #     (LeCun luma 0.660, Obama luma 0.389 — 0.27 gap, almost 2x the Swift↔LeCun gap).
@@ -28,8 +33,8 @@ cd "$ROOT"
 source .venv/bin/activate
 
 REPO="${EVAL3_DATASET_REPO:-RobotLearningVLA/taylor_swift_1}"
-OUT="${EVAL3_TRAIN_OUT:-outputs/train/eval3_3way_50k_v4_filtered_stats}"
-JOB="${EVAL3_JOB_NAME:-eval3_3way_50k_v4_filtered_stats}"
+OUT="${EVAL3_TRAIN_OUT:-outputs/train/eval3_v8_gripper_repair_smooth}"
+JOB="${EVAL3_JOB_NAME:-eval3_v8_gripper_repair_smooth}"
 STEPS="${EVAL3_TRAIN_STEPS:-50000}"
 BATCH="${EVAL3_BATCH:-8}"
 DEVICE="${EVAL3_POLICY_DEVICE:-mps}"
@@ -60,6 +65,21 @@ export EVAL3_PRINT_SHUFFLE="${EVAL3_PRINT_SHUFFLE:-1}"
 export EVAL3_PRINT_SHUFFLE_P="${EVAL3_PRINT_SHUFFLE_P:-0.5}"
 export EVAL3_MASK_DIR="${EVAL3_MASK_DIR:-outputs/eval3_masks}"
 export EVAL3_BG_DIR="${EVAL3_BG_DIR:-outputs/eval3_backgrounds}"
+
+# Data-label fixes for v8 retrains. These repair the known dataset_v2 truncated
+# gripper bug and reduce learned arm jitter without smoothing gripper closures.
+export EVAL3_GRIPPER_REPAIR="${EVAL3_GRIPPER_REPAIR:-1}"
+export EVAL3_GRIPPER_REPAIR_NEW_DATA_ONLY="${EVAL3_GRIPPER_REPAIR_NEW_DATA_ONLY:-1}"
+export EVAL3_GRIPPER_OPEN_TARGET="${EVAL3_GRIPPER_OPEN_TARGET:-55}"
+export EVAL3_GRIPPER_OPEN_THRESHOLD="${EVAL3_GRIPPER_OPEN_THRESHOLD:-20}"
+export EVAL3_ACTION_SMOOTH_WINDOW="${EVAL3_ACTION_SMOOTH_WINDOW:-3}"
+export EVAL3_ACTION_SMOOTH_GRIPPER="${EVAL3_ACTION_SMOOTH_GRIPPER:-0}"
+
+# Optional architecture experiment: train the motor policy to obey spatial slot
+# prompts ("left/middle/right print"). Use this with a separate target selector
+# that maps the celebrity prompt to a slot at deploy time.
+export EVAL3_SLOT_TASK_AUG="${EVAL3_SLOT_TASK_AUG:-0}"
+export EVAL3_SLOT_TASK_P="${EVAL3_SLOT_TASK_P:-0.5}"
 # v6 plan: per-celebrity OLD-data filters target the NEGATIVE wrist_roll mode so
 # the old data matches the NEW data's wrist_roll convention (~ -86 deg). The
 # previous v3 filters kept the POSITIVE mode, which conflicts with the new data.
@@ -102,6 +122,9 @@ echo "   task_aug              : $EVAL3_TASK_AUG"
 echo "   task_aug canonical p  : $EVAL3_TASK_AUG_CANONICAL_P"
 echo "   bg_replace (p)        : $EVAL3_BG_REPLACE ($EVAL3_BG_REPLACE_P)"
 echo "   print_shuffle (p)     : $EVAL3_PRINT_SHUFFLE ($EVAL3_PRINT_SHUFFLE_P)"
+echo "   gripper_repair        : $EVAL3_GRIPPER_REPAIR new_only=$EVAL3_GRIPPER_REPAIR_NEW_DATA_ONLY target=$EVAL3_GRIPPER_OPEN_TARGET threshold=$EVAL3_GRIPPER_OPEN_THRESHOLD"
+echo "   action_smooth_window  : $EVAL3_ACTION_SMOOTH_WINDOW gripper=$EVAL3_ACTION_SMOOTH_GRIPPER"
+echo "   slot_task_aug         : $EVAL3_SLOT_TASK_AUG (p=$EVAL3_SLOT_TASK_P)"
 echo "   truncate_at_placement : $EVAL3_TRUNCATE_AT_PLACEMENT mode=$EVAL3_TRUNCATE_PLACEMENT_MODE (grip>=$EVAL3_TRUNCATE_GRIP_THRESHOLD, lift>=$EVAL3_TRUNCATE_LIFT_THRESHOLD, buf=$EVAL3_TRUNCATE_BUFFER_FRAMES)"
 echo "   over-cap episodes     : ${EVAL3_TRUNCATE_ALLOW_OVER_CAP_EPISODES:-(none)} (+$EVAL3_TRUNCATE_OVER_CAP_EXTRA_FRAMES frames)"
 echo "   swift_episode_filter  : $EVAL3_SWIFT_EPISODE_FILTER"
@@ -129,6 +152,7 @@ exec python scripts/train_eval3_smolvla.py \
   --policy.compile_model=false \
   --policy.device="$DEVICE" \
   --policy.empty_cameras=2 \
+  --policy.pad_language_to=longest \
   --rename_map="$RENAMES" \
   --dataset.repo_id="$REPO" \
   --dataset.video_backend=pyav \

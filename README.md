@@ -30,8 +30,8 @@ python tools/eval3_smolvla_compat.py --repo-id RobotLearningVLA/taylor_swift_1
 # Fine-tune SmolVLA — single-dataset Swift baseline
 ./scripts/run_eval3_smolvla_train.sh
 
-# Fine-tune SmolVLA — 3-celebrity corpus with the full augmentation stack
-#   (frame truncation + task-string aug + bg replacement + print-shuffle + per-dataset episode filters)
+# Fine-tune SmolVLA — v8 corpus with gripper repair, arm-label smoothing, and visual aug
+#   (frame truncation + task aug + bg replacement + print-shuffle + repaired v2 gripper labels)
 ./scripts/run_eval3_smolvla_aug_train.sh
 
 # Closed-loop deploy on real SO-101 (rename_map MUST match training)
@@ -41,7 +41,11 @@ python scripts/eval3_vla_deploy.py \
   --dataset_repo_id=RobotLearningVLA/taylor_swift_1 \
   --rename_map='{"observation.images.front":"observation.images.camera1"}' \
   --policy.path=outputs/train/eval3_smolvla/checkpoints/<STEP>/pretrained_model \
-  --policy.device=mps --episode_time_s=20
+  --policy.device=mps --policy.num_steps=20 --policy.n_action_steps=25 \
+  --interpolation_multiplier=2 --action_smoothing_alpha=0.25 \
+  --max_action_delta_deg=6 --gripper_open_bias_deg=5 \
+  --gripper_open_bias_threshold_deg=20 \
+  --episode_time_s=20 --fps=30
 
 # Same command with --dry_run to verify the checkpoint loads without driving hardware
 ```

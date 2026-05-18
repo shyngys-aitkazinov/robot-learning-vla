@@ -1,0 +1,30 @@
+{
+  "$schema_comment": "Copy to embodiment_stats.json and fill from Hub dataset stats + calibration review.",
+  "description": "Maps OpenVLA predict_action vector indices → SO-101 joint targets (degrees or radians — match training dataset convention).",
+  "stats_source_repo_id": "RobotLearningVLA/dataset_v2_taylor_swift_left_1",
+  "openvla_action_dim_expected": 7,
+  "so101_joint_names": [
+    "shoulder_pan.pos",
+    "shoulder_lift.pos",
+    "elbow_flex.pos",
+    "wrist_flex.pos",
+    "wrist_roll.pos",
+    "gripper.pos"
+  ],
+  "joint_limits_deg": {
+    "shoulder_pan.pos": [-180, 180],
+    "shoulder_lift.pos": [-180, 180],
+    "elbow_flex.pos": [-180, 180],
+    "wrist_flex.pos": [-180, 180],
+    "wrist_roll.pos": [-180, 180],
+    "gripper.pos": [0, 100]
+  },
+  "mapping": {
+    "shoulder_pan.pos": {"src_idx": 0, "scale": 1.0, "offset": 0.0},
+    "shoulder_lift.pos": {"src_idx": 1, "scale": 1.0, "offset": 0.0},
+    "elbow_flex.pos": {"src_idx": 2, "scale": 1.0, "offset": 0.0},
+    "wrist_flex.pos": {"src_idx": 3, "scale": 1.0, "offset": 0.0},
+    "wrist_roll.pos": {"src_idx": 4, "scale": 1.0, "offset": 0.0},
+    "gripper.pos": {"src_idx": 5, "scale": 1.0, "offset": 0.0}
+  }
+}

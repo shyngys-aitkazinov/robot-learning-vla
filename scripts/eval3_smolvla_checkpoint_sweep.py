@@ -135,6 +135,15 @@ def _parse_args() -> argparse.Namespace:
         default=0.0,
         help="Exit non-zero if best prompt-nearest accuracy is below this fraction. 0 disables.",
     )
+    ap.add_argument(
+        "--meta-repo-id",
+        default="",
+        help=(
+            "LeRobot Hub dataset id for dataset metadata/stats used to build preprocessors "
+            "(must match the checkpoint's training dataset for correct normalization). "
+            "Default: first repo in --dataset-repos (evaluation order)."
+        ),
+    )
     return ap.parse_args()
 
 
@@ -418,13 +427,14 @@ def _evaluate_checkpoint(
     revision: str,
     rename_map: dict[str, str],
     robot_type: str,
+    meta_repo_id: str,
 ) -> dict[str, Any]:
     print(f"[checkpoint] loading {step}: {policy_path}", flush=True)
     t0 = time.time()
     cfg, policy, preprocessor, postprocessor, torch_device = _load_policy_bundle(
         policy_path,
         device=device,
-        meta_repo_id=samples[0].repo_id,
+        meta_repo_id=meta_repo_id,
         revision=revision,
         rename_map=rename_map,
     )
@@ -593,6 +603,7 @@ def main() -> None:
     repo_ids = [x.strip() for x in args.dataset_repos.split(",") if x.strip()]
     rename_map = json.loads(args.rename_map)
     ckpts = _checkpoint_paths(args.train_dir, args.checkpoints)
+    meta_repo_id = (args.meta_repo_id or "").strip() or repo_ids[0]
 
     print(f"[sweep] checkpoints={[step for step, _ in ckpts]}", flush=True)
     datasets, samples = _load_datasets(
@@ -606,6 +617,7 @@ def main() -> None:
         raise RuntimeError("No evaluation samples selected.")
     action_names = datasets[repo_ids[0]].meta.features[ACTION_KEY].get("names") or []
     print(f"[sweep] total_samples={len(samples)} action_names={action_names}", flush=True)
+    print(f"[sweep] meta_repo_id={meta_repo_id}", flush=True)
 
     results = []
     for step, policy_path in ckpts:
@@ -621,6 +633,7 @@ def main() -> None:
                 revision=args.revision,
                 rename_map=rename_map,
                 robot_type=args.robot_type,
+                meta_repo_id=meta_repo_id,
             )
         )
 
@@ -639,6 +652,7 @@ def main() -> None:
             "camera_key": args.camera_key,
             "rename_map": rename_map,
             "device": args.device,
+            "meta_repo_id": meta_repo_id,
         },
         "best_checkpoint": best,
         "results": results,

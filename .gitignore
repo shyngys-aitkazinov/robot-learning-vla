@@ -1,5 +1,6 @@
 # Python / uv
 .venv/
+.venv_openvla/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -12,6 +13,10 @@ pyproject.toml.bak.*
 
 # Camera captures from lerobot-find-cameras + generated training artifacts
 outputs/
+
+# OpenVLA integration scratch outputs
+integrations/openvla/.scratch/
+integrations/openvla/outputs/
 
 # Locally materialized LeRobot datasets and 3rd-party data dumps (see datasets/README.md).
 # Ignore everything under datasets/ except the README and the small metadata JSON
