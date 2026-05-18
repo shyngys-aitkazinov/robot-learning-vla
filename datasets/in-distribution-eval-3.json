@@ -1,0 +1,79 @@
+{
+  "dataset": "Eval 3 In-Distribution (TOY) celebrity images",
+  "source": "in-distribution-eval-3.pdf (course-provided), rendered at 300 DPI and auto-rotated to portrait via face detection",
+  "root": "datasets/in-distribution-eval-3",
+  "generated_at": "2026-05-18T21:17:06+00:00",
+  "total_celebrities": 3,
+  "total_images": 15,
+  "total_bytes": 7003469,
+  "held_out_identities_target": [
+    "Barack Obama",
+    "Taylor Swift",
+    "Yann LeCun"
+  ],
+  "held_out_identities_present": [
+    "Barack Obama",
+    "Taylor Swift",
+    "Yann LeCun"
+  ],
+  "name_overrides_applied": {},
+  "celebrities": [
+    {
+      "name": "Taylor Swift",
+      "slug": "taylor_swift",
+      "dir": "datasets/in-distribution-eval-3/taylor_swift",
+      "n_images": 5,
+      "total_bytes": 2613928,
+      "held_out": true,
+      "aspect_counts": {
+        "portrait": 5,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 2182,
+        "median": 2194,
+        "max": 2204
+      }
+    },
+    {
+      "name": "Barack Obama",
+      "slug": "barack_obama",
+      "dir": "datasets/in-distribution-eval-3/barack_obama",
+      "n_images": 5,
+      "total_bytes": 1823091,
+      "held_out": true,
+      "aspect_counts": {
+        "portrait": 5,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 2114,
+        "median": 2144,
+        "max": 2157
+      }
+    },
+    {
+      "name": "Yann LeCun",
+      "slug": "yann_lecun",
+      "dir": "datasets/in-distribution-eval-3/yann_lecun",
+      "n_images": 5,
+      "total_bytes": 2566450,
+      "held_out": true,
+      "aspect_counts": {
+        "portrait": 5,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 2032,
+        "median": 2063,
+        "max": 2101
+      }
+    }
+  ]
+}

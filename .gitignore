@@ -26,6 +26,9 @@ datasets/*
 !datasets/pins-face-recognition.json
 !datasets/pins-face-recognition-top30.json
 !datasets/pins-face-recognition-top50.json
+!datasets/in-distribution-eval-3.json
+!datasets/in-distribution-eval-3/
+!datasets/in-distribution-eval-3/**
 
 # OS
 .DS_Store
