@@ -811,17 +811,26 @@ def pick_celebrities(
     min_portrait_frac: float = 0.80,
     min_images: int = 30,
     n: int = 3,
+    allow_held_out: bool = False,
 ) -> list[dict]:
-    """Pick ``n`` celebrities + one random portrait JPG each, deterministically."""
+    """Pick ``n`` celebrities + one random portrait JPG each, deterministically.
+
+    With ``allow_held_out=True`` and relaxed thresholds, this also works against
+    ``datasets/in-distribution-eval-3.json`` (the 15-image TOY pool whose entries
+    are intentionally ``held_out=True`` and have low ``aspect_portrait_frac``).
+    """
     meta = json.loads(top30_json.read_text(encoding="utf-8"))
     pool = [
         c for c in meta["celebrities"]
-        if not c.get("held_out")
+        if (allow_held_out or not c.get("held_out"))
         and c.get("aspect_portrait_frac", 0.0) >= min_portrait_frac
         and c.get("n_images", 0) >= min_images
     ]
     if len(pool) < n:
-        sys.exit(f"only {len(pool)} celebrities pass the filter; need {n}")
+        sys.exit(
+            f"only {len(pool)} celebrities pass the filter; need {n}. "
+            f"For the TOY pool, try --allow-held-out --min-portrait-frac 0 --min-images 1."
+        )
     chosen = rng.sample(pool, n)
     picks = []
     for c in chosen:
@@ -864,6 +873,15 @@ def main() -> None:
                     metavar=("H", "S", "V"))
     ap.add_argument("--n-boards", type=int, default=3,
                     help="Number of ChArUco boards visible in the scene (default 3 = semicircle layout).")
+    # Celebrity-pool filter knobs (defaults suit the Pins top-30; TOY needs relaxing).
+    ap.add_argument("--allow-held-out", action="store_true",
+                    help="Include held-out (TOY) identities. Required when pointing "
+                         "--top30-json at datasets/in-distribution-eval-3.json.")
+    ap.add_argument("--min-portrait-frac", type=float, default=0.80,
+                    help="Minimum aspect_portrait_frac for a celeb to be eligible "
+                         "(0 to disable). TOY images are mostly landscape, set to 0.")
+    ap.add_argument("--min-images", type=int, default=30,
+                    help="Minimum n_images for a celeb to be eligible. TOY has 5 each, use 1.")
     # Table-blend distortion knobs. Defaults measured from the captured ChArUco rig.
     ap.add_argument("--blend", action=argparse.BooleanOptionalAction, default=True,
                     help="Apply brightness/contrast/saturation/blur/noise to celeb images "
@@ -918,7 +936,12 @@ def main() -> None:
 
     # --- 2. Pick celebrities --------------------------------------------
     print(f"[3/5] picking {args.n_boards} celebrities (seed={args.seed})")
-    picks = pick_celebrities(args.top30_json, rng, n=args.n_boards)
+    picks = pick_celebrities(
+        args.top30_json, rng, n=args.n_boards,
+        min_portrait_frac=args.min_portrait_frac,
+        min_images=args.min_images,
+        allow_held_out=args.allow_held_out,
+    )
     BOARD_LABELS = ["left", "middle", "right"][:args.n_boards]
     celebrities_by_board: dict[str, dict] = {}
     for label, p in zip(BOARD_LABELS, picks):

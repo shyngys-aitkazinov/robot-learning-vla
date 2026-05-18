@@ -162,8 +162,8 @@ def apply() -> None:
     #    so their dataclass inheritance uses stub parents instead of the broken HF PretrainedConfig.
     import_utils._transformers_available = False
     try:
-        import lerobot.policies.groot.groot_n1  # noqa: F401
         import lerobot.policies.groot.action_head.flow_matching_action_head  # noqa: F401
+        import lerobot.policies.groot.groot_n1  # noqa: F401
         import lerobot.policies.groot.modeling_groot  # noqa: F401
         import lerobot.policies.groot.processor_groot  # noqa: F401
     finally:

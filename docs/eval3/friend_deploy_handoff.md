@@ -2,6 +2,31 @@
 
 This document is a self-contained recipe for taking the **`RobotLearningVLA/eval3-smolvla-3way-50k-v3-fresh`** checkpoint and running it on an SO-101 follower arm. Follow it top to bottom on the machine that has the robot plugged in. The whole thing is one-time setup + one command to run a rollout.
 
+> ⚠️ **Critical — read this before composing any deploy command** ⚠️
+>
+> The single most common Eval 3 deploy failure is forgetting the
+> `--rename_map` (custom deploy script) / `--dataset.rename_map`
+> (`lerobot-record`) flag. Without it, the SmolVLA policy expects
+> `observation.images.camera1` but the robot provides
+> `observation.images.front` — they never alias and the policy receives
+> zero-padded black frames for every camera key. The result is
+> "policy doesn't recognise celebrities" AND "grabbing policy is bad".
+>
+> Validate any deploy command before plugging in the arm with:
+>
+> ```bash
+> python tools/eval3_check_deploy_command.py \
+>     --policy-pretrained-path <CHECKPOINT> \
+>     --rename-map '{"observation.images.front":"observation.images.camera1"}' \
+>     --task "Place the coke on Taylor Swift"
+> ```
+>
+> You want `PASS  (cameras=OK, task=OK)` on the final line. If it FAILs,
+> the script prints the corrected command line — copy it verbatim.
+>
+> For a post-failure remediation walkthrough see
+> [`v7_deploy_checklist.md`](v7_deploy_checklist.md).
+
 The model was fine-tuned from `lerobot/smolvla_base` on 44 filtered episodes / 25 553 frames across `taylor_swift_1`, `yann_lecun_1`, and `barack_obama_1` with the full v3 augmentation stack: 10 torchvision image transforms + background replacement (p=0.3) + target-preserving print-position shuffle (p=0.5) + task-string augmentation. 14/58 source episodes were dropped: Swift 6 bad-recording episodes + LeCun/Obama 8 negative-mode wrist_roll episodes (operator inconsistency, both modes physically valid but only one mode kept for clean supervision). Architecture is SmolVLA (≈450 M params, ≈907 MB on disk).
 
 ### Behavior changes vs the previous `eval3-smolvla-3way-50k-aug-v1` checkpoint
