@@ -1,0 +1,2023 @@
+{
+  "dataset": "Pins Face Recognition",
+  "source_url": "https://www.kaggle.com/datasets/hereisburak/pins-face-recognition",
+  "root": "datasets/pins-face-recognition/105_classes_pins_dataset",
+  "generated_at": "2026-05-17T17:01:38+00:00",
+  "total_celebrities": 105,
+  "total_images": 17534,
+  "total_bytes": 388959666,
+  "held_out_identities_target": [
+    "Barack Obama",
+    "Taylor Swift",
+    "Yann LeCun"
+  ],
+  "held_out_identities_present": [
+    "Barack Obama",
+    "Taylor Swift"
+  ],
+  "name_overrides_applied": {
+    "kiernen shipka": "Kiernan Shipka",
+    "alycia dabnem carey": "Alycia Debnam-Carey",
+    "henry cavil": "Henry Cavill",
+    "jake mcdorman": "Jake McDorman",
+    "katharine mcphee": "Katharine McPhee",
+    "shakira isabel mebarak": "Shakira"
+  },
+  "celebrities": [
+    {
+      "name": "Adriana Lima",
+      "slug": "Adriana Lima",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Adriana Lima",
+      "n_images": 213,
+      "total_bytes": 8217375,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 211,
+        "landscape": 1,
+        "square": 1
+      },
+      "aspect_portrait_frac": 0.991,
+      "long_edge_px": {
+        "min": 108,
+        "median": 320,
+        "max": 802
+      }
+    },
+    {
+      "name": "Alex Lawther",
+      "slug": "Alex Lawther",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Alex Lawther",
+      "n_images": 152,
+      "total_bytes": 2697264,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 146,
+        "landscape": 6,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.961,
+      "long_edge_px": {
+        "min": 105,
+        "median": 184,
+        "max": 608
+      }
+    },
+    {
+      "name": "Alexandra Daddario",
+      "slug": "Alexandra Daddario",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Alexandra Daddario",
+      "n_images": 225,
+      "total_bytes": 5330230,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 223,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.991,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 668
+      }
+    },
+    {
+      "name": "Alvaro Morte",
+      "slug": "Alvaro Morte",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Alvaro Morte",
+      "n_images": 139,
+      "total_bytes": 2296555,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 133,
+        "landscape": 6,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.957,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 554
+      }
+    },
+    {
+      "name": "Amanda Crew",
+      "slug": "Amanda Crew",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Amanda Crew",
+      "n_images": 117,
+      "total_bytes": 1933565,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 115,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.983,
+      "long_edge_px": {
+        "min": 108,
+        "median": 129,
+        "max": 558
+      }
+    },
+    {
+      "name": "Andy Samberg",
+      "slug": "Andy Samberg",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Andy Samberg",
+      "n_images": 196,
+      "total_bytes": 3758994,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 196,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 105,
+        "median": 184,
+        "max": 658
+      }
+    },
+    {
+      "name": "Anne Hathaway",
+      "slug": "Anne Hathaway",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Anne Hathaway",
+      "n_images": 203,
+      "total_bytes": 5104628,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 201,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.99,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 558
+      }
+    },
+    {
+      "name": "Anthony Mackie",
+      "slug": "Anthony Mackie",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Anthony Mackie",
+      "n_images": 124,
+      "total_bytes": 1660033,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 113,
+        "landscape": 11,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.911,
+      "long_edge_px": {
+        "min": 102,
+        "median": 128,
+        "max": 658
+      }
+    },
+    {
+      "name": "Avril Lavigne",
+      "slug": "Avril Lavigne",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Avril Lavigne",
+      "n_images": 162,
+      "total_bytes": 3407315,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 158,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.975,
+      "long_edge_px": {
+        "min": 102,
+        "median": 184,
+        "max": 802
+      }
+    },
+    {
+      "name": "Ben Affleck",
+      "slug": "Ben Affleck",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Ben Affleck",
+      "n_images": 126,
+      "total_bytes": 2708062,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 122,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.968,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 463
+      }
+    },
+    {
+      "name": "Bill Gates",
+      "slug": "Bill Gates",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Bill Gates",
+      "n_images": 122,
+      "total_bytes": 2372824,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 113,
+        "landscape": 9,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.926,
+      "long_edge_px": {
+        "min": 102,
+        "median": 184,
+        "max": 463
+      }
+    },
+    {
+      "name": "Bobby Morley",
+      "slug": "Bobby Morley",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Bobby Morley",
+      "n_images": 138,
+      "total_bytes": 2862188,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 128,
+        "landscape": 10,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.928,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 512
+      }
+    },
+    {
+      "name": "Brenton Thwaites",
+      "slug": "Brenton Thwaites",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Brenton Thwaites",
+      "n_images": 209,
+      "total_bytes": 4644934,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 204,
+        "landscape": 5,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.976,
+      "long_edge_px": {
+        "min": 105,
+        "median": 185,
+        "max": 558
+      }
+    },
+    {
+      "name": "Brian J. Smith",
+      "slug": "Brian J. Smith",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Brian J. Smith",
+      "n_images": 102,
+      "total_bytes": 2260038,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 96,
+        "landscape": 6,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.941,
+      "long_edge_px": {
+        "min": 108,
+        "median": 213,
+        "max": 668
+      }
+    },
+    {
+      "name": "Brie Larson",
+      "slug": "Brie Larson",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Brie Larson",
+      "n_images": 169,
+      "total_bytes": 3514272,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 168,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.994,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 558
+      }
+    },
+    {
+      "name": "Chris Evans",
+      "slug": "Chris Evans",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Chris Evans",
+      "n_images": 166,
+      "total_bytes": 2981074,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 164,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.988,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 550
+      }
+    },
+    {
+      "name": "Chris Hemsworth",
+      "slug": "Chris Hemsworth",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Chris Hemsworth",
+      "n_images": 159,
+      "total_bytes": 4296937,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 157,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.987,
+      "long_edge_px": {
+        "min": 108,
+        "median": 185,
+        "max": 668
+      }
+    },
+    {
+      "name": "Chris Pratt",
+      "slug": "Chris Pratt",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Chris Pratt",
+      "n_images": 176,
+      "total_bytes": 3586441,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 173,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.983,
+      "long_edge_px": {
+        "min": 105,
+        "median": 184,
+        "max": 671
+      }
+    },
+    {
+      "name": "Christian Bale",
+      "slug": "Christian Bale",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Christian Bale",
+      "n_images": 154,
+      "total_bytes": 4183335,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 154,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 105,
+        "median": 225,
+        "max": 700
+      }
+    },
+    {
+      "name": "Cristiano Ronaldo",
+      "slug": "Cristiano Ronaldo",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Cristiano Ronaldo",
+      "n_images": 98,
+      "total_bytes": 2061828,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 98,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 105,
+        "median": 184,
+        "max": 668
+      }
+    },
+    {
+      "name": "Danielle Panabaker",
+      "slug": "Danielle Panabaker",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Danielle Panabaker",
+      "n_images": 181,
+      "total_bytes": 3395743,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 180,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.994,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 790
+      }
+    },
+    {
+      "name": "Dominic Purcell",
+      "slug": "Dominic Purcell",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Dominic Purcell",
+      "n_images": 146,
+      "total_bytes": 2625973,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 135,
+        "landscape": 11,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.925,
+      "long_edge_px": {
+        "min": 105,
+        "median": 184,
+        "max": 554
+      }
+    },
+    {
+      "name": "Dwayne Johnson",
+      "slug": "Dwayne Johnson",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Dwayne Johnson",
+      "n_images": 141,
+      "total_bytes": 2944933,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 129,
+        "landscape": 12,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.915,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 802
+      }
+    },
+    {
+      "name": "Eliza Taylor",
+      "slug": "Eliza Taylor",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Eliza Taylor",
+      "n_images": 162,
+      "total_bytes": 3205065,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 151,
+        "landscape": 11,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.932,
+      "long_edge_px": {
+        "min": 105,
+        "median": 184,
+        "max": 608
+      }
+    },
+    {
+      "name": "Elizabeth Lail",
+      "slug": "Elizabeth Lail",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Elizabeth Lail",
+      "n_images": 158,
+      "total_bytes": 3430662,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 153,
+        "landscape": 5,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.968,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 463
+      }
+    },
+    {
+      "name": "Emilia Clarke",
+      "slug": "Emilia Clarke",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Emilia Clarke",
+      "n_images": 210,
+      "total_bytes": 5750368,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 206,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.981,
+      "long_edge_px": {
+        "min": 108,
+        "median": 266,
+        "max": 790
+      }
+    },
+    {
+      "name": "Emma Stone",
+      "slug": "Emma Stone",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Emma Stone",
+      "n_images": 139,
+      "total_bytes": 3678846,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 138,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.993,
+      "long_edge_px": {
+        "min": 108,
+        "median": 185,
+        "max": 723
+      }
+    },
+    {
+      "name": "Emma Watson",
+      "slug": "Emma Watson",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Emma Watson",
+      "n_images": 211,
+      "total_bytes": 5057392,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 210,
+        "landscape": 0,
+        "square": 1
+      },
+      "aspect_portrait_frac": 0.995,
+      "long_edge_px": {
+        "min": 105,
+        "median": 185,
+        "max": 658
+      }
+    },
+    {
+      "name": "Gwyneth Paltrow",
+      "slug": "Gwyneth Paltrow",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Gwyneth Paltrow",
+      "n_images": 187,
+      "total_bytes": 3376876,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 184,
+        "landscape": 1,
+        "square": 2
+      },
+      "aspect_portrait_frac": 0.984,
+      "long_edge_px": {
+        "min": 102,
+        "median": 154,
+        "max": 558
+      }
+    },
+    {
+      "name": "Henry Cavill",
+      "slug": "Henry Cavil",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Henry Cavil",
+      "n_images": 195,
+      "total_bytes": 6065581,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 194,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.995,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 668
+      }
+    },
+    {
+      "name": "Hugh Jackman",
+      "slug": "Hugh Jackman",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Hugh Jackman",
+      "n_images": 179,
+      "total_bytes": 4234642,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 178,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.994,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 668
+      }
+    },
+    {
+      "name": "Inbar Lavi",
+      "slug": "Inbar Lavi",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Inbar Lavi",
+      "n_images": 127,
+      "total_bytes": 1795868,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 126,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.992,
+      "long_edge_px": {
+        "min": 108,
+        "median": 155,
+        "max": 463
+      }
+    },
+    {
+      "name": "Irina Shayk",
+      "slug": "Irina Shayk",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Irina Shayk",
+      "n_images": 156,
+      "total_bytes": 3842329,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 152,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.974,
+      "long_edge_px": {
+        "min": 108,
+        "median": 219,
+        "max": 802
+      }
+    },
+    {
+      "name": "Jake McDorman",
+      "slug": "Jake Mcdorman",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Jake Mcdorman",
+      "n_images": 159,
+      "total_bytes": 2614353,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 156,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.981,
+      "long_edge_px": {
+        "min": 105,
+        "median": 155,
+        "max": 558
+      }
+    },
+    {
+      "name": "Jason Momoa",
+      "slug": "Jason Momoa",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Jason Momoa",
+      "n_images": 184,
+      "total_bytes": 4837154,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 180,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.978,
+      "long_edge_px": {
+        "min": 108,
+        "median": 185,
+        "max": 802
+      }
+    },
+    {
+      "name": "Jennifer Lawrence",
+      "slug": "Jennifer Lawrence",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Jennifer Lawrence",
+      "n_images": 180,
+      "total_bytes": 4737454,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 180,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 730
+      }
+    },
+    {
+      "name": "Jeremy Renner",
+      "slug": "Jeremy Renner",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Jeremy Renner",
+      "n_images": 167,
+      "total_bytes": 3270252,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 164,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.982,
+      "long_edge_px": {
+        "min": 105,
+        "median": 155,
+        "max": 608
+      }
+    },
+    {
+      "name": "Jessica Barden",
+      "slug": "Jessica Barden",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Jessica Barden",
+      "n_images": 141,
+      "total_bytes": 2311272,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 140,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.993,
+      "long_edge_px": {
+        "min": 105,
+        "median": 184,
+        "max": 668
+      }
+    },
+    {
+      "name": "Jimmy Fallon",
+      "slug": "Jimmy Fallon",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Jimmy Fallon",
+      "n_images": 113,
+      "total_bytes": 1838955,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 112,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.991,
+      "long_edge_px": {
+        "min": 108,
+        "median": 155,
+        "max": 462
+      }
+    },
+    {
+      "name": "Johnny Depp",
+      "slug": "Johnny Depp",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Johnny Depp",
+      "n_images": 182,
+      "total_bytes": 3593490,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 179,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.984,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 668
+      }
+    },
+    {
+      "name": "Josh Radnor",
+      "slug": "Josh Radnor",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Josh Radnor",
+      "n_images": 117,
+      "total_bytes": 1759187,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 114,
+        "landscape": 2,
+        "square": 1
+      },
+      "aspect_portrait_frac": 0.974,
+      "long_edge_px": {
+        "min": 105,
+        "median": 155,
+        "max": 507
+      }
+    },
+    {
+      "name": "Katharine McPhee",
+      "slug": "Katharine Mcphee",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Katharine Mcphee",
+      "n_images": 177,
+      "total_bytes": 3321087,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 177,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 108,
+        "median": 155,
+        "max": 773
+      }
+    },
+    {
+      "name": "Katherine Langford",
+      "slug": "Katherine Langford",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Katherine Langford",
+      "n_images": 226,
+      "total_bytes": 6179432,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 222,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.982,
+      "long_edge_px": {
+        "min": 108,
+        "median": 225,
+        "max": 668
+      }
+    },
+    {
+      "name": "Keanu Reeves",
+      "slug": "Keanu Reeves",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Keanu Reeves",
+      "n_images": 160,
+      "total_bytes": 3651232,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 157,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.981,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 668
+      }
+    },
+    {
+      "name": "Krysten Ritter",
+      "slug": "Krysten Ritter",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Krysten Ritter",
+      "n_images": 171,
+      "total_bytes": 2645114,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 166,
+        "landscape": 5,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.971,
+      "long_edge_px": {
+        "min": 108,
+        "median": 155,
+        "max": 463
+      }
+    },
+    {
+      "name": "Leonardo DiCaprio",
+      "slug": "Leonardo DiCaprio",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Leonardo DiCaprio",
+      "n_images": 237,
+      "total_bytes": 4828690,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 230,
+        "landscape": 7,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.97,
+      "long_edge_px": {
+        "min": 102,
+        "median": 185,
+        "max": 668
+      }
+    },
+    {
+      "name": "Lili Reinhart",
+      "slug": "Lili Reinhart",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Lili Reinhart",
+      "n_images": 150,
+      "total_bytes": 3777878,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 149,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.993,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 802
+      }
+    },
+    {
+      "name": "Lindsey Morgan",
+      "slug": "Lindsey Morgan",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Lindsey Morgan",
+      "n_images": 169,
+      "total_bytes": 2925253,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 163,
+        "landscape": 6,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.964,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 462
+      }
+    },
+    {
+      "name": "Lionel Messi",
+      "slug": "Lionel Messi",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Lionel Messi",
+      "n_images": 86,
+      "total_bytes": 1690311,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 86,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 547
+      }
+    },
+    {
+      "name": "Logan Lerman",
+      "slug": "Logan Lerman",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Logan Lerman",
+      "n_images": 212,
+      "total_bytes": 3984406,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 210,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.991,
+      "long_edge_px": {
+        "min": 105,
+        "median": 184,
+        "max": 668
+      }
+    },
+    {
+      "name": "Madelaine Petsch",
+      "slug": "Madelaine Petsch",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Madelaine Petsch",
+      "n_images": 192,
+      "total_bytes": 3974844,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 174,
+        "landscape": 18,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.906,
+      "long_edge_px": {
+        "min": 108,
+        "median": 212,
+        "max": 547
+      }
+    },
+    {
+      "name": "Maisie Williams",
+      "slug": "Maisie Williams",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Maisie Williams",
+      "n_images": 193,
+      "total_bytes": 4632684,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 188,
+        "landscape": 5,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.974,
+      "long_edge_px": {
+        "min": 108,
+        "median": 185,
+        "max": 658
+      }
+    },
+    {
+      "name": "Maria Pedraza",
+      "slug": "Maria Pedraza",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Maria Pedraza",
+      "n_images": 122,
+      "total_bytes": 2428152,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 117,
+        "landscape": 5,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.959,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 671
+      }
+    },
+    {
+      "name": "Marie Avgeropoulos",
+      "slug": "Marie Avgeropoulos",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Marie Avgeropoulos",
+      "n_images": 161,
+      "total_bytes": 3613427,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 154,
+        "landscape": 7,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.957,
+      "long_edge_px": {
+        "min": 108,
+        "median": 218,
+        "max": 554
+      }
+    },
+    {
+      "name": "Mark Ruffalo",
+      "slug": "Mark Ruffalo",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Mark Ruffalo",
+      "n_images": 178,
+      "total_bytes": 3281611,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 176,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.989,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 558
+      }
+    },
+    {
+      "name": "Mark Zuckerberg",
+      "slug": "Mark Zuckerberg",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Mark Zuckerberg",
+      "n_images": 95,
+      "total_bytes": 1290137,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 90,
+        "landscape": 5,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.947,
+      "long_edge_px": {
+        "min": 108,
+        "median": 155,
+        "max": 436
+      }
+    },
+    {
+      "name": "Megan Fox",
+      "slug": "Megan Fox",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Megan Fox",
+      "n_images": 209,
+      "total_bytes": 5447240,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 205,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.981,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 696
+      }
+    },
+    {
+      "name": "Miley Cyrus",
+      "slug": "Miley Cyrus",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Miley Cyrus",
+      "n_images": 178,
+      "total_bytes": 3706940,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 176,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.989,
+      "long_edge_px": {
+        "min": 108,
+        "median": 185,
+        "max": 558
+      }
+    },
+    {
+      "name": "Millie Bobby Brown",
+      "slug": "Millie Bobby Brown",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Millie Bobby Brown",
+      "n_images": 191,
+      "total_bytes": 4217348,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 185,
+        "landscape": 6,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.969,
+      "long_edge_px": {
+        "min": 102,
+        "median": 212,
+        "max": 558
+      }
+    },
+    {
+      "name": "Morena Baccarin",
+      "slug": "Morena Baccarin",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Morena Baccarin",
+      "n_images": 175,
+      "total_bytes": 3593731,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 171,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.977,
+      "long_edge_px": {
+        "min": 108,
+        "median": 185,
+        "max": 510
+      }
+    },
+    {
+      "name": "Morgan Freeman",
+      "slug": "Morgan Freeman",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Morgan Freeman",
+      "n_images": 105,
+      "total_bytes": 3838725,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 98,
+        "landscape": 7,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.933,
+      "long_edge_px": {
+        "min": 108,
+        "median": 251,
+        "max": 558
+      }
+    },
+    {
+      "name": "Nadia Hilker",
+      "slug": "Nadia Hilker",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Nadia Hilker",
+      "n_images": 133,
+      "total_bytes": 2419406,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 127,
+        "landscape": 6,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.955,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 463
+      }
+    },
+    {
+      "name": "Natalie Dormer",
+      "slug": "Natalie Dormer",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Natalie Dormer",
+      "n_images": 198,
+      "total_bytes": 5511973,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 194,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.98,
+      "long_edge_px": {
+        "min": 108,
+        "median": 225,
+        "max": 608
+      }
+    },
+    {
+      "name": "Natalie Portman",
+      "slug": "Natalie Portman",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Natalie Portman",
+      "n_images": 166,
+      "total_bytes": 5193425,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 164,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.988,
+      "long_edge_px": {
+        "min": 105,
+        "median": 266,
+        "max": 802
+      }
+    },
+    {
+      "name": "Neil Patrick Harris",
+      "slug": "Neil Patrick Harris",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Neil Patrick Harris",
+      "n_images": 116,
+      "total_bytes": 1321139,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 115,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.991,
+      "long_edge_px": {
+        "min": 105,
+        "median": 154,
+        "max": 387
+      }
+    },
+    {
+      "name": "Pedro Alonso",
+      "slug": "Pedro Alonso",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Pedro Alonso",
+      "n_images": 125,
+      "total_bytes": 1728843,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 117,
+        "landscape": 8,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.936,
+      "long_edge_px": {
+        "min": 108,
+        "median": 155,
+        "max": 456
+      }
+    },
+    {
+      "name": "Penn Badgley",
+      "slug": "Penn Badgley",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Penn Badgley",
+      "n_images": 171,
+      "total_bytes": 2933595,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 168,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.982,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 558
+      }
+    },
+    {
+      "name": "Rami Malek",
+      "slug": "Rami Malek",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Rami Malek",
+      "n_images": 160,
+      "total_bytes": 2572865,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 159,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.994,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 547
+      }
+    },
+    {
+      "name": "Rebecca Ferguson",
+      "slug": "Rebecca Ferguson",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Rebecca Ferguson",
+      "n_images": 178,
+      "total_bytes": 4733177,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 176,
+        "landscape": 1,
+        "square": 1
+      },
+      "aspect_portrait_frac": 0.989,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 759
+      }
+    },
+    {
+      "name": "Richard Harmon",
+      "slug": "Richard Harmon",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Richard Harmon",
+      "n_images": 148,
+      "total_bytes": 2530282,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 145,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.98,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 527
+      }
+    },
+    {
+      "name": "Rihanna",
+      "slug": "Rihanna",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Rihanna",
+      "n_images": 133,
+      "total_bytes": 3767374,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 131,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.985,
+      "long_edge_px": {
+        "min": 108,
+        "median": 225,
+        "max": 802
+      }
+    },
+    {
+      "name": "Robert De Niro",
+      "slug": "Robert De Niro",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Robert De Niro",
+      "n_images": 156,
+      "total_bytes": 4529494,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 153,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.981,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 668
+      }
+    },
+    {
+      "name": "Robert Downey Jr",
+      "slug": "Robert Downey Jr",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Robert Downey Jr",
+      "n_images": 233,
+      "total_bytes": 5613146,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 230,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.987,
+      "long_edge_px": {
+        "min": 105,
+        "median": 184,
+        "max": 668
+      }
+    },
+    {
+      "name": "Sarah Wayne Callies",
+      "slug": "Sarah Wayne Callies",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Sarah Wayne Callies",
+      "n_images": 159,
+      "total_bytes": 2814753,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 155,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.975,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 671
+      }
+    },
+    {
+      "name": "Selena Gomez",
+      "slug": "Selena Gomez",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Selena Gomez",
+      "n_images": 186,
+      "total_bytes": 3743848,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 181,
+        "landscape": 5,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.973,
+      "long_edge_px": {
+        "min": 102,
+        "median": 184,
+        "max": 558
+      }
+    },
+    {
+      "name": "Shakira",
+      "slug": "Shakira Isabel Mebarak",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Shakira Isabel Mebarak",
+      "n_images": 154,
+      "total_bytes": 3183635,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 151,
+        "landscape": 2,
+        "square": 1
+      },
+      "aspect_portrait_frac": 0.981,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 558
+      }
+    },
+    {
+      "name": "Sophie Turner",
+      "slug": "Sophie Turner",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Sophie Turner",
+      "n_images": 204,
+      "total_bytes": 5203781,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 201,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.985,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 802
+      }
+    },
+    {
+      "name": "Stephen Amell",
+      "slug": "Stephen Amell",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Stephen Amell",
+      "n_images": 159,
+      "total_bytes": 3971416,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 159,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 668
+      }
+    },
+    {
+      "name": "Taylor Swift",
+      "slug": "Taylor Swift",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Taylor Swift",
+      "n_images": 131,
+      "total_bytes": 3003327,
+      "held_out": true,
+      "aspect_counts": {
+        "portrait": 127,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.969,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 547
+      }
+    },
+    {
+      "name": "Tom Cruise",
+      "slug": "Tom Cruise",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Tom Cruise",
+      "n_images": 192,
+      "total_bytes": 4563057,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 188,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.979,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 802
+      }
+    },
+    {
+      "name": "Tom Hardy",
+      "slug": "Tom Hardy",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Tom Hardy",
+      "n_images": 198,
+      "total_bytes": 4935368,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 187,
+        "landscape": 11,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.944,
+      "long_edge_px": {
+        "min": 108,
+        "median": 215,
+        "max": 668
+      }
+    },
+    {
+      "name": "Tom Hiddleston",
+      "slug": "Tom Hiddleston",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Tom Hiddleston",
+      "n_images": 181,
+      "total_bytes": 3940251,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 179,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.989,
+      "long_edge_px": {
+        "min": 108,
+        "median": 185,
+        "max": 558
+      }
+    },
+    {
+      "name": "Tom Holland",
+      "slug": "Tom Holland",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Tom Holland",
+      "n_images": 189,
+      "total_bytes": 3133669,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 188,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.995,
+      "long_edge_px": {
+        "min": 108,
+        "median": 155,
+        "max": 558
+      }
+    },
+    {
+      "name": "Tuppence Middleton",
+      "slug": "Tuppence Middleton",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Tuppence Middleton",
+      "n_images": 133,
+      "total_bytes": 2743346,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 132,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.992,
+      "long_edge_px": {
+        "min": 108,
+        "median": 185,
+        "max": 668
+      }
+    },
+    {
+      "name": "Ursula Corbero",
+      "slug": "Ursula Corbero",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Ursula Corbero",
+      "n_images": 167,
+      "total_bytes": 3728623,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 161,
+        "landscape": 6,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.964,
+      "long_edge_px": {
+        "min": 108,
+        "median": 212,
+        "max": 558
+      }
+    },
+    {
+      "name": "Wentworth Miller",
+      "slug": "Wentworth Miller",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Wentworth Miller",
+      "n_images": 179,
+      "total_bytes": 3971229,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 159,
+        "landscape": 17,
+        "square": 3
+      },
+      "aspect_portrait_frac": 0.888,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 558
+      }
+    },
+    {
+      "name": "Zac Efron",
+      "slug": "Zac Efron",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Zac Efron",
+      "n_images": 191,
+      "total_bytes": 3922004,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 188,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.984,
+      "long_edge_px": {
+        "min": 105,
+        "median": 184,
+        "max": 558
+      }
+    },
+    {
+      "name": "Zendaya",
+      "slug": "Zendaya",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Zendaya",
+      "n_images": 138,
+      "total_bytes": 2934763,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 136,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.986,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 554
+      }
+    },
+    {
+      "name": "Zoe Saldana",
+      "slug": "Zoe Saldana",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Zoe Saldana",
+      "n_images": 186,
+      "total_bytes": 3333914,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 181,
+        "landscape": 5,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.973,
+      "long_edge_px": {
+        "min": 105,
+        "median": 164,
+        "max": 658
+      }
+    },
+    {
+      "name": "Alycia Debnam-Carey",
+      "slug": "alycia dabnem carey",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_alycia dabnem carey",
+      "n_images": 211,
+      "total_bytes": 4815968,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 198,
+        "landscape": 13,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.938,
+      "long_edge_px": {
+        "min": 102,
+        "median": 218,
+        "max": 668
+      }
+    },
+    {
+      "name": "Amber Heard",
+      "slug": "amber heard",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_amber heard",
+      "n_images": 218,
+      "total_bytes": 7107063,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 215,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.986,
+      "long_edge_px": {
+        "min": 105,
+        "median": 266,
+        "max": 668
+      }
+    },
+    {
+      "name": "Barack Obama",
+      "slug": "barack obama",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_barack obama",
+      "n_images": 119,
+      "total_bytes": 2367293,
+      "held_out": true,
+      "aspect_counts": {
+        "portrait": 117,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.983,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 668
+      }
+    },
+    {
+      "name": "Barbara Palvin",
+      "slug": "barbara palvin",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_barbara palvin",
+      "n_images": 197,
+      "total_bytes": 6070826,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 194,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.985,
+      "long_edge_px": {
+        "min": 108,
+        "median": 266,
+        "max": 790
+      }
+    },
+    {
+      "name": "Camila Mendes",
+      "slug": "camila mendes",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_camila mendes",
+      "n_images": 162,
+      "total_bytes": 3116210,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 161,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.994,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 558
+      }
+    },
+    {
+      "name": "Elizabeth Olsen",
+      "slug": "elizabeth olsen",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_elizabeth olsen",
+      "n_images": 221,
+      "total_bytes": 6171344,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 217,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.982,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 658
+      }
+    },
+    {
+      "name": "Ellen Page",
+      "slug": "ellen page",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_ellen page",
+      "n_images": 188,
+      "total_bytes": 3435331,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 187,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.995,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 671
+      }
+    },
+    {
+      "name": "Elon Musk",
+      "slug": "elon musk",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_elon musk",
+      "n_images": 135,
+      "total_bytes": 2547289,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 132,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.978,
+      "long_edge_px": {
+        "min": 108,
+        "median": 185,
+        "max": 668
+      }
+    },
+    {
+      "name": "Gal Gadot",
+      "slug": "gal gadot",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_gal gadot",
+      "n_images": 199,
+      "total_bytes": 5062046,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 194,
+        "landscape": 5,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.975,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 802
+      }
+    },
+    {
+      "name": "Grant Gustin",
+      "slug": "grant gustin",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_grant gustin",
+      "n_images": 183,
+      "total_bytes": 3661814,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 180,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.984,
+      "long_edge_px": {
+        "min": 108,
+        "median": 185,
+        "max": 668
+      }
+    },
+    {
+      "name": "Jeff Bezos",
+      "slug": "jeff bezos",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_jeff bezos",
+      "n_images": 106,
+      "total_bytes": 1477235,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 93,
+        "landscape": 13,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.877,
+      "long_edge_px": {
+        "min": 102,
+        "median": 155,
+        "max": 469
+      }
+    },
+    {
+      "name": "Kiernan Shipka",
+      "slug": "kiernen shipka",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_kiernen shipka",
+      "n_images": 203,
+      "total_bytes": 5171510,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 202,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.995,
+      "long_edge_px": {
+        "min": 105,
+        "median": 221,
+        "max": 668
+      }
+    },
+    {
+      "name": "Margot Robbie",
+      "slug": "margot robbie",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_margot robbie",
+      "n_images": 221,
+      "total_bytes": 6474987,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 214,
+        "landscape": 7,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.968,
+      "long_edge_px": {
+        "min": 105,
+        "median": 225,
+        "max": 802
+      }
+    },
+    {
+      "name": "Melissa Fumero",
+      "slug": "melissa fumero",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_melissa fumero",
+      "n_images": 154,
+      "total_bytes": 2465420,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 152,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.987,
+      "long_edge_px": {
+        "min": 108,
+        "median": 155,
+        "max": 463
+      }
+    },
+    {
+      "name": "Scarlett Johansson",
+      "slug": "scarlett johansson",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_scarlett johansson",
+      "n_images": 201,
+      "total_bytes": 6200746,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 197,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.98,
+      "long_edge_px": {
+        "min": 108,
+        "median": 266,
+        "max": 668
+      }
+    },
+    {
+      "name": "Tom Ellis",
+      "slug": "tom ellis",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_tom ellis",
+      "n_images": 180,
+      "total_bytes": 3560352,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 172,
+        "landscape": 8,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.956,
+      "long_edge_px": {
+        "min": 102,
+        "median": 185,
+        "max": 802
+      }
+    }
+  ]
+}

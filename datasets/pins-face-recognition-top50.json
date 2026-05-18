@@ -1,0 +1,1069 @@
+{
+  "dataset": "Pins Face Recognition — Top 50 (curated subset)",
+  "source_json": "datasets/pins-face-recognition.json",
+  "source_url": "https://www.kaggle.com/datasets/hereisburak/pins-face-recognition",
+  "generated_at": "2026-05-18T15:07:12+00:00",
+  "total_celebrities": 50,
+  "total_images": 8406,
+  "total_bytes": 195882576,
+  "category_counts": {
+    "athlete": 2,
+    "music": 4,
+    "tech": 4,
+    "actor": 39,
+    "tv": 1
+  },
+  "selection_rationale": "Ranked by global pop-culture recognizability, optimised for the Eval 3 OOD use case: celebrities the SmolVLM backbone is most likely to recognise zero-shot. Ranks 1-30 match build_pins_top30.py exactly; ranks 31-50 add broadly-recognisable supporting names (GoT principals, MCU secondaries, current music acts, veteran A-listers). Excludes TOY identities scored in runs 1-6.",
+  "celebrities": [
+    {
+      "name": "Cristiano Ronaldo",
+      "slug": "Cristiano Ronaldo",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Cristiano Ronaldo",
+      "n_images": 98,
+      "total_bytes": 2061828,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 98,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 105,
+        "median": 184,
+        "max": 668
+      },
+      "rank": 1,
+      "category": "athlete"
+    },
+    {
+      "name": "Lionel Messi",
+      "slug": "Lionel Messi",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Lionel Messi",
+      "n_images": 86,
+      "total_bytes": 1690311,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 86,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 547
+      },
+      "rank": 2,
+      "category": "athlete"
+    },
+    {
+      "name": "Rihanna",
+      "slug": "Rihanna",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Rihanna",
+      "n_images": 133,
+      "total_bytes": 3767374,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 131,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.985,
+      "long_edge_px": {
+        "min": 108,
+        "median": 225,
+        "max": 802
+      },
+      "rank": 3,
+      "category": "music"
+    },
+    {
+      "name": "Elon Musk",
+      "slug": "elon musk",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_elon musk",
+      "n_images": 135,
+      "total_bytes": 2547289,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 132,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.978,
+      "long_edge_px": {
+        "min": 108,
+        "median": 185,
+        "max": 668
+      },
+      "rank": 4,
+      "category": "tech"
+    },
+    {
+      "name": "Leonardo DiCaprio",
+      "slug": "Leonardo DiCaprio",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Leonardo DiCaprio",
+      "n_images": 237,
+      "total_bytes": 4828690,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 230,
+        "landscape": 7,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.97,
+      "long_edge_px": {
+        "min": 102,
+        "median": 185,
+        "max": 668
+      },
+      "rank": 5,
+      "category": "actor"
+    },
+    {
+      "name": "Tom Cruise",
+      "slug": "Tom Cruise",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Tom Cruise",
+      "n_images": 192,
+      "total_bytes": 4563057,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 188,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.979,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 802
+      },
+      "rank": 6,
+      "category": "actor"
+    },
+    {
+      "name": "Dwayne Johnson",
+      "slug": "Dwayne Johnson",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Dwayne Johnson",
+      "n_images": 141,
+      "total_bytes": 2944933,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 129,
+        "landscape": 12,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.915,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 802
+      },
+      "rank": 7,
+      "category": "actor"
+    },
+    {
+      "name": "Robert Downey Jr",
+      "slug": "Robert Downey Jr",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Robert Downey Jr",
+      "n_images": 233,
+      "total_bytes": 5613146,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 230,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.987,
+      "long_edge_px": {
+        "min": 105,
+        "median": 184,
+        "max": 668
+      },
+      "rank": 8,
+      "category": "actor"
+    },
+    {
+      "name": "Scarlett Johansson",
+      "slug": "scarlett johansson",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_scarlett johansson",
+      "n_images": 201,
+      "total_bytes": 6200746,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 197,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.98,
+      "long_edge_px": {
+        "min": 108,
+        "median": 266,
+        "max": 668
+      },
+      "rank": 9,
+      "category": "actor"
+    },
+    {
+      "name": "Jennifer Lawrence",
+      "slug": "Jennifer Lawrence",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Jennifer Lawrence",
+      "n_images": 180,
+      "total_bytes": 4737454,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 180,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 730
+      },
+      "rank": 10,
+      "category": "actor"
+    },
+    {
+      "name": "Margot Robbie",
+      "slug": "margot robbie",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_margot robbie",
+      "n_images": 221,
+      "total_bytes": 6474987,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 214,
+        "landscape": 7,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.968,
+      "long_edge_px": {
+        "min": 105,
+        "median": 225,
+        "max": 802
+      },
+      "rank": 11,
+      "category": "actor"
+    },
+    {
+      "name": "Zendaya",
+      "slug": "Zendaya",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Zendaya",
+      "n_images": 138,
+      "total_bytes": 2934763,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 136,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.986,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 554
+      },
+      "rank": 12,
+      "category": "actor"
+    },
+    {
+      "name": "Emma Watson",
+      "slug": "Emma Watson",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Emma Watson",
+      "n_images": 211,
+      "total_bytes": 5057392,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 210,
+        "landscape": 0,
+        "square": 1
+      },
+      "aspect_portrait_frac": 0.995,
+      "long_edge_px": {
+        "min": 105,
+        "median": 185,
+        "max": 658
+      },
+      "rank": 13,
+      "category": "actor"
+    },
+    {
+      "name": "Tom Holland",
+      "slug": "Tom Holland",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Tom Holland",
+      "n_images": 189,
+      "total_bytes": 3133669,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 188,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.995,
+      "long_edge_px": {
+        "min": 108,
+        "median": 155,
+        "max": 558
+      },
+      "rank": 14,
+      "category": "actor"
+    },
+    {
+      "name": "Keanu Reeves",
+      "slug": "Keanu Reeves",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Keanu Reeves",
+      "n_images": 160,
+      "total_bytes": 3651232,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 157,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.981,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 668
+      },
+      "rank": 15,
+      "category": "actor"
+    },
+    {
+      "name": "Bill Gates",
+      "slug": "Bill Gates",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Bill Gates",
+      "n_images": 122,
+      "total_bytes": 2372824,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 113,
+        "landscape": 9,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.926,
+      "long_edge_px": {
+        "min": 102,
+        "median": 184,
+        "max": 463
+      },
+      "rank": 16,
+      "category": "tech"
+    },
+    {
+      "name": "Mark Zuckerberg",
+      "slug": "Mark Zuckerberg",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Mark Zuckerberg",
+      "n_images": 95,
+      "total_bytes": 1290137,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 90,
+        "landscape": 5,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.947,
+      "long_edge_px": {
+        "min": 108,
+        "median": 155,
+        "max": 436
+      },
+      "rank": 17,
+      "category": "tech"
+    },
+    {
+      "name": "Jeff Bezos",
+      "slug": "jeff bezos",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_jeff bezos",
+      "n_images": 106,
+      "total_bytes": 1477235,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 93,
+        "landscape": 13,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.877,
+      "long_edge_px": {
+        "min": 102,
+        "median": 155,
+        "max": 469
+      },
+      "rank": 18,
+      "category": "tech"
+    },
+    {
+      "name": "Chris Evans",
+      "slug": "Chris Evans",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Chris Evans",
+      "n_images": 166,
+      "total_bytes": 2981074,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 164,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.988,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 550
+      },
+      "rank": 19,
+      "category": "actor"
+    },
+    {
+      "name": "Chris Hemsworth",
+      "slug": "Chris Hemsworth",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Chris Hemsworth",
+      "n_images": 159,
+      "total_bytes": 4296937,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 157,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.987,
+      "long_edge_px": {
+        "min": 108,
+        "median": 185,
+        "max": 668
+      },
+      "rank": 20,
+      "category": "actor"
+    },
+    {
+      "name": "Hugh Jackman",
+      "slug": "Hugh Jackman",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Hugh Jackman",
+      "n_images": 179,
+      "total_bytes": 4234642,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 178,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.994,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 668
+      },
+      "rank": 21,
+      "category": "actor"
+    },
+    {
+      "name": "Morgan Freeman",
+      "slug": "Morgan Freeman",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Morgan Freeman",
+      "n_images": 105,
+      "total_bytes": 3838725,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 98,
+        "landscape": 7,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.933,
+      "long_edge_px": {
+        "min": 108,
+        "median": 251,
+        "max": 558
+      },
+      "rank": 22,
+      "category": "actor"
+    },
+    {
+      "name": "Johnny Depp",
+      "slug": "Johnny Depp",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Johnny Depp",
+      "n_images": 182,
+      "total_bytes": 3593490,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 179,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.984,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 668
+      },
+      "rank": 23,
+      "category": "actor"
+    },
+    {
+      "name": "Christian Bale",
+      "slug": "Christian Bale",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Christian Bale",
+      "n_images": 154,
+      "total_bytes": 4183335,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 154,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 105,
+        "median": 225,
+        "max": 700
+      },
+      "rank": 24,
+      "category": "actor"
+    },
+    {
+      "name": "Anne Hathaway",
+      "slug": "Anne Hathaway",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Anne Hathaway",
+      "n_images": 203,
+      "total_bytes": 5104628,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 201,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.99,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 558
+      },
+      "rank": 25,
+      "category": "actor"
+    },
+    {
+      "name": "Emma Stone",
+      "slug": "Emma Stone",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Emma Stone",
+      "n_images": 139,
+      "total_bytes": 3678846,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 138,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.993,
+      "long_edge_px": {
+        "min": 108,
+        "median": 185,
+        "max": 723
+      },
+      "rank": 26,
+      "category": "actor"
+    },
+    {
+      "name": "Selena Gomez",
+      "slug": "Selena Gomez",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Selena Gomez",
+      "n_images": 186,
+      "total_bytes": 3743848,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 181,
+        "landscape": 5,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.973,
+      "long_edge_px": {
+        "min": 102,
+        "median": 184,
+        "max": 558
+      },
+      "rank": 27,
+      "category": "music"
+    },
+    {
+      "name": "Millie Bobby Brown",
+      "slug": "Millie Bobby Brown",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Millie Bobby Brown",
+      "n_images": 191,
+      "total_bytes": 4217348,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 185,
+        "landscape": 6,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.969,
+      "long_edge_px": {
+        "min": 102,
+        "median": 212,
+        "max": 558
+      },
+      "rank": 28,
+      "category": "actor"
+    },
+    {
+      "name": "Jason Momoa",
+      "slug": "Jason Momoa",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Jason Momoa",
+      "n_images": 184,
+      "total_bytes": 4837154,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 180,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.978,
+      "long_edge_px": {
+        "min": 108,
+        "median": 185,
+        "max": 802
+      },
+      "rank": 29,
+      "category": "actor"
+    },
+    {
+      "name": "Mark Ruffalo",
+      "slug": "Mark Ruffalo",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Mark Ruffalo",
+      "n_images": 178,
+      "total_bytes": 3281611,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 176,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.989,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 558
+      },
+      "rank": 30,
+      "category": "actor"
+    },
+    {
+      "name": "Natalie Portman",
+      "slug": "Natalie Portman",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Natalie Portman",
+      "n_images": 166,
+      "total_bytes": 5193425,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 164,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.988,
+      "long_edge_px": {
+        "min": 105,
+        "median": 266,
+        "max": 802
+      },
+      "rank": 31,
+      "category": "actor"
+    },
+    {
+      "name": "Tom Hardy",
+      "slug": "Tom Hardy",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Tom Hardy",
+      "n_images": 198,
+      "total_bytes": 4935368,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 187,
+        "landscape": 11,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.944,
+      "long_edge_px": {
+        "min": 108,
+        "median": 215,
+        "max": 668
+      },
+      "rank": 32,
+      "category": "actor"
+    },
+    {
+      "name": "Gal Gadot",
+      "slug": "gal gadot",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_gal gadot",
+      "n_images": 199,
+      "total_bytes": 5062046,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 194,
+        "landscape": 5,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.975,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 802
+      },
+      "rank": 33,
+      "category": "actor"
+    },
+    {
+      "name": "Brie Larson",
+      "slug": "Brie Larson",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Brie Larson",
+      "n_images": 169,
+      "total_bytes": 3514272,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 168,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.994,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 558
+      },
+      "rank": 34,
+      "category": "actor"
+    },
+    {
+      "name": "Henry Cavill",
+      "slug": "Henry Cavil",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Henry Cavil",
+      "n_images": 195,
+      "total_bytes": 6065581,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 194,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.995,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 668
+      },
+      "rank": 35,
+      "category": "actor"
+    },
+    {
+      "name": "Emilia Clarke",
+      "slug": "Emilia Clarke",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Emilia Clarke",
+      "n_images": 210,
+      "total_bytes": 5750368,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 206,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.981,
+      "long_edge_px": {
+        "min": 108,
+        "median": 266,
+        "max": 790
+      },
+      "rank": 36,
+      "category": "actor"
+    },
+    {
+      "name": "Sophie Turner",
+      "slug": "Sophie Turner",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Sophie Turner",
+      "n_images": 204,
+      "total_bytes": 5203781,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 201,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.985,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 802
+      },
+      "rank": 37,
+      "category": "actor"
+    },
+    {
+      "name": "Rami Malek",
+      "slug": "Rami Malek",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Rami Malek",
+      "n_images": 160,
+      "total_bytes": 2572865,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 159,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.994,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 547
+      },
+      "rank": 38,
+      "category": "actor"
+    },
+    {
+      "name": "Ben Affleck",
+      "slug": "Ben Affleck",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Ben Affleck",
+      "n_images": 126,
+      "total_bytes": 2708062,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 122,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.968,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 463
+      },
+      "rank": 39,
+      "category": "actor"
+    },
+    {
+      "name": "Tom Hiddleston",
+      "slug": "Tom Hiddleston",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Tom Hiddleston",
+      "n_images": 181,
+      "total_bytes": 3940251,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 179,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.989,
+      "long_edge_px": {
+        "min": 108,
+        "median": 185,
+        "max": 558
+      },
+      "rank": 40,
+      "category": "actor"
+    },
+    {
+      "name": "Elizabeth Olsen",
+      "slug": "elizabeth olsen",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_elizabeth olsen",
+      "n_images": 221,
+      "total_bytes": 6171344,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 217,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.982,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 658
+      },
+      "rank": 41,
+      "category": "actor"
+    },
+    {
+      "name": "Miley Cyrus",
+      "slug": "Miley Cyrus",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Miley Cyrus",
+      "n_images": 178,
+      "total_bytes": 3706940,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 176,
+        "landscape": 2,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.989,
+      "long_edge_px": {
+        "min": 108,
+        "median": 185,
+        "max": 558
+      },
+      "rank": 42,
+      "category": "music"
+    },
+    {
+      "name": "Avril Lavigne",
+      "slug": "Avril Lavigne",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Avril Lavigne",
+      "n_images": 162,
+      "total_bytes": 3407315,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 158,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.975,
+      "long_edge_px": {
+        "min": 102,
+        "median": 184,
+        "max": 802
+      },
+      "rank": 43,
+      "category": "music"
+    },
+    {
+      "name": "Megan Fox",
+      "slug": "Megan Fox",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Megan Fox",
+      "n_images": 209,
+      "total_bytes": 5447240,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 205,
+        "landscape": 4,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.981,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 696
+      },
+      "rank": 44,
+      "category": "actor"
+    },
+    {
+      "name": "Penn Badgley",
+      "slug": "Penn Badgley",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Penn Badgley",
+      "n_images": 171,
+      "total_bytes": 2933595,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 168,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.982,
+      "long_edge_px": {
+        "min": 108,
+        "median": 184,
+        "max": 558
+      },
+      "rank": 45,
+      "category": "actor"
+    },
+    {
+      "name": "Jeremy Renner",
+      "slug": "Jeremy Renner",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Jeremy Renner",
+      "n_images": 167,
+      "total_bytes": 3270252,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 164,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.982,
+      "long_edge_px": {
+        "min": 105,
+        "median": 155,
+        "max": 608
+      },
+      "rank": 46,
+      "category": "actor"
+    },
+    {
+      "name": "Jimmy Fallon",
+      "slug": "Jimmy Fallon",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Jimmy Fallon",
+      "n_images": 113,
+      "total_bytes": 1838955,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 112,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.991,
+      "long_edge_px": {
+        "min": 108,
+        "median": 155,
+        "max": 462
+      },
+      "rank": 47,
+      "category": "tv"
+    },
+    {
+      "name": "Anthony Mackie",
+      "slug": "Anthony Mackie",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Anthony Mackie",
+      "n_images": 124,
+      "total_bytes": 1660033,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 113,
+        "landscape": 11,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.911,
+      "long_edge_px": {
+        "min": 102,
+        "median": 128,
+        "max": 658
+      },
+      "rank": 48,
+      "category": "actor"
+    },
+    {
+      "name": "Robert De Niro",
+      "slug": "Robert De Niro",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Robert De Niro",
+      "n_images": 156,
+      "total_bytes": 4529494,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 153,
+        "landscape": 3,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.981,
+      "long_edge_px": {
+        "min": 108,
+        "median": 221,
+        "max": 668
+      },
+      "rank": 49,
+      "category": "actor"
+    },
+    {
+      "name": "Maisie Williams",
+      "slug": "Maisie Williams",
+      "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Maisie Williams",
+      "n_images": 193,
+      "total_bytes": 4632684,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 188,
+        "landscape": 5,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.974,
+      "long_edge_px": {
+        "min": 108,
+        "median": 185,
+        "max": 658
+      },
+      "rank": 50,
+      "category": "actor"
+    }
+  ]
+}

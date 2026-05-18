@@ -14,9 +14,13 @@ pyproject.toml.bak.*
 outputs/
 
 # Locally materialized LeRobot datasets and 3rd-party data dumps (see datasets/README.md).
-# Ignore everything under datasets/ except the README that documents what belongs there.
+# Ignore everything under datasets/ except the README and the small metadata JSON
+# that the post-processor consumes (built by tools/build_pins_metadata.py).
 datasets/*
 !datasets/README.md
+!datasets/pins-face-recognition.json
+!datasets/pins-face-recognition-top30.json
+!datasets/pins-face-recognition-top50.json
 
 # OS
 .DS_Store
