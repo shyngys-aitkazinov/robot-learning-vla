@@ -157,7 +157,8 @@ def _patch_flower_proprio_device(model) -> None:
         for action_name, action_idx in self.action_space_index.action_spaces.items():
             mask = action_type == action_idx
             if mask.any():
-                encoded_proprio[mask] = self.proprio_encoders[action_name](proprio[mask]).squeeze(1)
+                proprio_out = self.proprio_encoders[action_name](proprio[mask]).squeeze(1)
+                encoded_proprio[mask] = proprio_out.to(device=device, dtype=default_dtype)
 
         return encoded_proprio
 
