@@ -12,13 +12,15 @@ import argparse
 import json
 import random
 import sys
+from dataclasses import dataclass
 from itertools import cycle
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
+from torch.nn.utils.rnn import pad_sequence
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -38,6 +40,84 @@ from eval3_external_vla_data import (  # noqa: E402
 
 
 IGNORE_INDEX = -100
+
+
+class LocalActionTokenizer:
+    """OpenVLA action-token discretizer without importing upstream RLDS code."""
+
+    def __init__(self, tokenizer, bins: int = 256, min_action: int = -1, max_action: int = 1) -> None:
+        self.tokenizer = tokenizer
+        self.n_bins = int(bins)
+        self.min_action = min_action
+        self.max_action = max_action
+        self.bins = np.linspace(min_action, max_action, self.n_bins)
+        self.bin_centers = (self.bins[:-1] + self.bins[1:]) / 2.0
+        self.action_token_begin_idx = int(self.tokenizer.vocab_size - (self.n_bins + 1))
+
+    def __call__(self, action: np.ndarray) -> str | list[str]:
+        action = np.clip(action, a_min=float(self.min_action), a_max=float(self.max_action))
+        discretized_action = np.digitize(action, self.bins)
+        if len(discretized_action.shape) == 1:
+            return self.tokenizer.decode(list(self.tokenizer.vocab_size - discretized_action))
+        return self.tokenizer.batch_decode((self.tokenizer.vocab_size - discretized_action).tolist())
+
+    def decode_token_ids_to_actions(self, action_token_ids: np.ndarray) -> np.ndarray:
+        discretized_actions = self.tokenizer.vocab_size - action_token_ids
+        discretized_actions = np.clip(discretized_actions - 1, a_min=0, a_max=self.bin_centers.shape[0] - 1)
+        return self.bin_centers[discretized_actions]
+
+
+@dataclass
+class LocalPaddedCollatorForActionPrediction:
+    model_max_length: int
+    pad_token_id: int
+    padding_side: str = "right"
+    pixel_values_dtype: torch.dtype = torch.float32
+
+    def __call__(self, instances: Sequence[dict[str, torch.Tensor]]) -> dict[str, Any]:
+        input_ids, labels = tuple([instance[key] for instance in instances] for key in ("input_ids", "labels"))
+        pixel_values = [instance["pixel_values"] for instance in instances]
+        dataset_names = [instance["dataset_name"] for instance in instances] if "dataset_name" in instances[0] else None
+
+        if self.padding_side != "right":
+            raise ValueError(f"Invalid tokenizer padding side for OpenVLA training: {self.padding_side}")
+        input_ids = pad_sequence(input_ids, batch_first=True, padding_value=self.pad_token_id)
+        labels = pad_sequence(labels, batch_first=True, padding_value=IGNORE_INDEX)
+        input_ids = input_ids[:, : self.model_max_length]
+        labels = labels[:, : self.model_max_length]
+        attention_mask = input_ids.ne(self.pad_token_id)
+
+        if isinstance(pixel_values[0], torch.Tensor):
+            pixel_values = torch.stack(pixel_values)
+        elif isinstance(pixel_values[0], dict):
+            pixel_values = {k: torch.stack([pixel_values[i][k] for i in range(len(input_ids))]) for k in pixel_values[0]}
+        else:
+            raise ValueError(f"Unsupported pixel_values type: {type(pixel_values[0])}")
+
+        out: dict[str, Any] = {
+            "pixel_values": pixel_values,
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": labels,
+        }
+        if dataset_names is not None:
+            out["dataset_names"] = dataset_names
+        return out
+
+
+class SimpleOpenVLAPromptBuilder:
+    """Prompt builder matching the public OpenVLA inference template."""
+
+    def __init__(self, _: str = "openvla"):
+        self.turns: list[tuple[str, str]] = []
+
+    def add_turn(self, role: str, value: str) -> None:
+        self.turns.append((role, value))
+
+    def get_prompt(self) -> str:
+        human = next((value for role, value in self.turns if role == "human"), "")
+        gpt = next((value for role, value in self.turns if role == "gpt"), "")
+        return f"In: {human}\nOut: {gpt}"
 
 
 def _jsonable(obj: Any) -> Any:
@@ -67,32 +147,46 @@ def register_openvla(openvla_src: str = "") -> dict[str, Any]:
 
     try:
         from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+        from transformers import AutoConfig, AutoImageProcessor, AutoModelForVision2Seq, AutoProcessor, BitsAndBytesConfig
+    except Exception as exc:  # pragma: no cover - depends on external OpenVLA env
+        raise RuntimeError(
+            "OpenVLA training dependencies are missing. Activate the OpenVLA venv and install "
+            "transformers, peft, bitsandbytes, torch, and torchvision."
+        ) from exc
+
+    action_tokenizer_cls = LocalActionTokenizer
+    collator_cls = LocalPaddedCollatorForActionPrediction
+    pure_prompt_builder = SimpleOpenVLAPromptBuilder
+    vicuna_prompt_builder = SimpleOpenVLAPromptBuilder
+
+    try:
         from prismatic.extern.hf.configuration_prismatic import OpenVLAConfig
         from prismatic.extern.hf.modeling_prismatic import OpenVLAForActionPrediction
         from prismatic.extern.hf.processing_prismatic import PrismaticImageProcessor, PrismaticProcessor
         from prismatic.models.backbones.llm.prompting import PurePromptBuilder, VicunaV15ChatPromptBuilder
         from prismatic.util.data_utils import PaddedCollatorForActionPrediction
         from prismatic.vla.action_tokenizer import ActionTokenizer
-        from transformers import AutoConfig, AutoImageProcessor, AutoModelForVision2Seq, AutoProcessor, BitsAndBytesConfig
-    except Exception as exc:  # pragma: no cover - depends on external OpenVLA env
-        raise RuntimeError(
-            "OpenVLA training dependencies are missing. Activate the OpenVLA venv and pass "
-            "--openvla-src=/path/to/openvla checkout if prismatic is not importable."
-        ) from exc
+    except Exception as exc:
+        print(f"OpenVLA local helper fallback active: {type(exc).__name__}: {exc}", flush=True)
+    else:
+        AutoConfig.register("openvla", OpenVLAConfig)
+        AutoImageProcessor.register(OpenVLAConfig, PrismaticImageProcessor)
+        AutoProcessor.register(OpenVLAConfig, PrismaticProcessor)
+        AutoModelForVision2Seq.register(OpenVLAConfig, OpenVLAForActionPrediction)
+        action_tokenizer_cls = ActionTokenizer
+        collator_cls = PaddedCollatorForActionPrediction
+        pure_prompt_builder = PurePromptBuilder
+        vicuna_prompt_builder = VicunaV15ChatPromptBuilder
 
-    AutoConfig.register("openvla", OpenVLAConfig)
-    AutoImageProcessor.register(OpenVLAConfig, PrismaticImageProcessor)
-    AutoProcessor.register(OpenVLAConfig, PrismaticProcessor)
-    AutoModelForVision2Seq.register(OpenVLAConfig, OpenVLAForActionPrediction)
     return {
-        "ActionTokenizer": ActionTokenizer,
+        "ActionTokenizer": action_tokenizer_cls,
         "AutoModelForVision2Seq": AutoModelForVision2Seq,
         "AutoProcessor": AutoProcessor,
         "BitsAndBytesConfig": BitsAndBytesConfig,
         "LoraConfig": LoraConfig,
-        "PaddedCollatorForActionPrediction": PaddedCollatorForActionPrediction,
-        "PurePromptBuilder": PurePromptBuilder,
-        "VicunaV15ChatPromptBuilder": VicunaV15ChatPromptBuilder,
+        "PaddedCollatorForActionPrediction": collator_cls,
+        "PurePromptBuilder": pure_prompt_builder,
+        "VicunaV15ChatPromptBuilder": vicuna_prompt_builder,
         "get_peft_model": get_peft_model,
         "prepare_model_for_kbit_training": prepare_model_for_kbit_training,
     }
