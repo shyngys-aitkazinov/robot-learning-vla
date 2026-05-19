@@ -52,7 +52,16 @@ from lerobot.utils.control_utils import predict_action  # noqa: E402
 from lerobot.utils.device_utils import get_safe_torch_device  # noqa: E402
 from lerobot.processor.rename_processor import rename_stats  # noqa: E402
 
+from huggingface_hub import hf_hub_download  # noqa: E402
+
 from eval3_dataset_prep import BackgroundReplaceAugmenter, PrintShuffleAugmenter  # noqa: E402
+
+
+def _model_config_path(policy_path: str) -> str:
+    p = Path(policy_path)
+    if p.exists():
+        return str(p / "config.json")
+    return hf_hub_download(policy_path, "config.json")
 
 
 PROMPTS = [
@@ -119,7 +128,7 @@ def main() -> int:
     from dataclasses import fields as _dc_fields
     from lerobot.policies.smolvla.configuration_smolvla import SmolVLAConfig
 
-    with open(Path(args.policy_path) / "config.json") as f:
+    with open(_model_config_path(args.policy_path), encoding="utf-8") as f:
         raw_cfg = _json.load(f)
     raw_cfg.pop("type", None)
     valid_keys = {f.name for f in _dc_fields(SmolVLAConfig)}

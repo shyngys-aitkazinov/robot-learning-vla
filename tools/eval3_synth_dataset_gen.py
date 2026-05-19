@@ -341,6 +341,16 @@ class TileCache:
 
     Key: (celeb_slug, photo_idx). Value: BGR ndarray at the internal warp
     resolution (board_w_mm*10, board_h_mm*10) with per-tile table-blend applied.
+
+    The per-tile blend noise is seeded by ``(seed_base, slug, photo_idx)`` so
+    the same (slug, photo_idx) always produces the bit-identical tile regardless
+    of worker, load order, or which other tiles were preloaded first. When the
+    three v4 balanced workers share the same ``seed_base`` (see
+    ``generate_one_balanced_dataset``) the celebrity face composites are
+    pixel-identical across the three per-celebrity datasets. This is what makes
+    the trainer see *strict* same-image-different-prompt counterfactuals
+    (closes the "no counterfactual supervision" gap in
+    ``outputs/eval3_celebrity_diagnosis/DIAGNOSIS_REPORT.md``).
     """
 
     def __init__(
@@ -359,9 +369,10 @@ class TileCache:
         self._blend_args = blend_args
         self._tw, self._th = target_w_px, target_h_px
         self._board_aspect = board_aspect
-        # Deterministic per-tile noise: seed-once RNG; tiles preprocessed in
-        # sorted order so the same (slug, idx) always gets the same noise.
-        self._rng = np.random.default_rng(rng_seed)
+        # Stored as a base for the per-tile-deterministic RNG (see `get`).
+        # Two workers with the same `_seed_base` produce bit-identical tiles
+        # for the same (slug, photo_idx).
+        self._seed_base = int(rng_seed)
 
     @property
     def n_photos_per_celeb(self) -> int:
@@ -380,7 +391,9 @@ class TileCache:
                 sys.exit(f"failed to read {jpgs[photo_idx]}")
             cropped = _center_crop_to_aspect(raw, self._board_aspect)
             resized = cv2.resize(cropped, (self._tw, self._th), interpolation=cv2.INTER_AREA)
-            tile = _apply_table_blend(resized, rng=self._rng, **self._blend_args)
+            tile_seed = abs(hash((self._seed_base, slug, int(photo_idx)))) % (2**31)
+            tile_rng = np.random.default_rng(tile_seed)
+            tile = _apply_table_blend(resized, rng=tile_rng, **self._blend_args)
             self._cache[key] = tile
         return self._cache[key]
 
@@ -393,8 +406,8 @@ class TileCache:
 class WorkerArgs:
     """All inputs for generate_one_dataset, picklable for multiprocessing."""
     target_celeb: str
-    target_position: str
-    n_configs: int                  # cap (-1 = use full N*N*N*2 grid)
+    target_position: str            # ignored when balanced=True; covers all 3 slots
+    n_configs: int                  # cap (-1 = use full grid)
     source_root: str
     out_root: str
     celebrity_jsons: list[str]      # one or more — merged at tile-load time
@@ -405,6 +418,13 @@ class WorkerArgs:
     hub_org: str
     overwrite: bool
     output_suffix: str = ""         # appended after 'dataset_v3_synth' in the dataset name
+    # Fix A (Eval3 celeb-confusion plan): emit one balanced dataset per celebrity
+    # whose episodes cover ALL three placement slots. This breaks the
+    # action = f(slot) shortcut documented in
+    # ``docs/eval3/charuco_pipeline.md:281`` by varying the action target
+    # within a single (task = "Place the coke on <Celeb>") dataset.
+    balanced: bool = False
+    output_version: str = "v3"      # "v3" -> dataset_v3_synth_*  ;  "v4" -> dataset_v4_synth_*
 
 
 def _board_layout(target_position: str, other_celeb_1: str, other_celeb_2: str,
@@ -419,6 +439,43 @@ def _board_layout(target_position: str, other_celeb_1: str, other_celeb_2: str,
     layout[other_slots[0]] = other_celeb_1
     layout[other_slots[1]] = other_celeb_2
     return layout
+
+
+def build_balanced_config_grid(
+    target_celeb: str, n_photos_per_celeb: int = 5,
+) -> list[Config]:
+    """Same combinatorics as ``build_config_grid`` but with target_position rotating
+    through all 3 slots inside one dataset. Used by the Fix A "language-forcing"
+    mode: by spanning all 3 placement slots in a single (task = celeb) dataset,
+    the action label varies WITHIN the dataset and the trainer can no longer
+    shortcut on "action = f(slot)".
+
+    Total configs per celeb dataset: ``3 * n_photos_per_celeb^3 * 2``
+    (= 750 for the default 5-photo pool).
+    """
+    if target_celeb not in CANONICAL_NAME:
+        sys.exit(f"unknown target_celeb={target_celeb!r}, want one of {list(CANONICAL_NAME)}")
+    others = sorted(s for s in CANONICAL_NAME if s != target_celeb)
+    other_a, other_b = others
+    configs: list[Config] = []
+    for pos in POSITIONS:
+        for tp in range(n_photos_per_celeb):
+            for ap in range(n_photos_per_celeb):
+                for bp in range(n_photos_per_celeb):
+                    for swap in (False, True):
+                        configs.append(Config(
+                            target_celeb=target_celeb,
+                            target_position=pos,
+                            target_photo_idx=tp,
+                            other1_celeb=other_a,
+                            other1_photo_idx=ap,
+                            other2_celeb=other_b,
+                            other2_photo_idx=bp,
+                            other_swap=swap,
+                        ))
+    expected = 3 * (n_photos_per_celeb ** 3) * 2
+    assert len(configs) == expected, f"want {expected} configs, got {len(configs)}"
+    return configs
 
 
 def generate_one_dataset(args: WorkerArgs) -> dict:
@@ -591,6 +648,203 @@ def generate_one_dataset(args: WorkerArgs) -> dict:
     return summary
 
 
+def generate_one_balanced_dataset(args: WorkerArgs) -> dict:
+    """Fix A: build one dataset whose episodes COVER ALL THREE placement slots.
+
+    Output naming follows ``args.output_version``:
+      - "v3" -> ``dataset_v3_synth{suffix}_<celeb>_balanced_2`` (backwards name)
+      - "v4" -> ``dataset_v4_synth{suffix}_<celeb>_balanced_1`` (recommended)
+
+    Differences vs ``generate_one_dataset``:
+      * config grid spans all 3 slots (``build_balanced_config_grid``)
+      * source episodes are loaded for ALL three ``dataset_v3_charuco_<pos>_2``
+      * per-config dispatch picks the source matching ``config.target_position``,
+        so the action / state / camera frames all come from a left/middle/right
+        ChArUco recording that matches where ``target_celeb`` is placed
+      * task string is unchanged (one canonical celebrity per dataset);
+        only the VISUAL placement and the ACTION TARGET vary together
+    """
+    t0 = time.time()
+    target_celeb = args.target_celeb
+    canonical_task = f"Place the coke on {CANONICAL_NAME[target_celeb]}"
+    suffix = f"_{args.output_suffix}" if args.output_suffix else ""
+    if args.output_version == "v4":
+        out_name = f"dataset_v4_synth{suffix}_{target_celeb}_balanced_1"
+    else:
+        out_name = f"dataset_v3_synth{suffix}_{target_celeb}_balanced_2"
+    out_root = Path(args.out_root)
+    out_dir = out_root / out_name
+    if out_dir.exists():
+        if args.overwrite:
+            import shutil
+            shutil.rmtree(out_dir)
+        else:
+            return {
+                "name": out_name, "skipped": True,
+                "reason": f"output dir already exists: {out_dir}",
+            }
+
+    print(f"[{out_name}] START (balanced) — task='{canonical_task}'", flush=True)
+
+    target_w_px = int(round(BOARD_W_MM * 10))
+    target_h_px = int(round(BOARD_H_MM * 10))
+    board_aspect = BOARD_H_MM / BOARD_W_MM
+    # Celeb-INDEPENDENT seed base: all three balanced workers (Swift, LeCun,
+    # Obama) share the same tile-cache seed, so (slug, photo_idx) -> tile
+    # is bit-identical across the three v4 datasets. Combined with the
+    # per-tile-deterministic RNG inside ``TileCache.get`` this means the
+    # celebrity face composites are pixel-identical across the three
+    # ``dataset_v4_synth_<celeb>_balanced_1`` datasets, giving the trainer
+    # strict same-face-different-prompt counterfactuals (as opposed to
+    # merely "similar visual layout, different prompt"). Background frames
+    # still differ because the ChArUco source recording depends on the
+    # target slot, but the discriminative pixels (the three warped face
+    # tiles) are identical.
+    tile_seed = abs(hash((args.output_version, "balanced", "v2_shared"))) % (2**31)
+    tile_cache = TileCache(
+        celebrity_jsons=[Path(p) for p in args.celebrity_jsons],
+        blend_args=args.blend_args,
+        target_w_px=target_w_px,
+        target_h_px=target_h_px,
+        board_aspect=board_aspect,
+        rng_seed=tile_seed,
+    )
+    n_photos = tile_cache.n_photos_per_celeb
+    full_grid = build_balanced_config_grid(target_celeb, n_photos_per_celeb=n_photos)
+    n_configs = len(full_grid) if args.n_configs < 0 else min(args.n_configs, len(full_grid))
+    configs = full_grid[:n_configs]
+    print(f"[{out_name}] pool: {n_photos} photos/celeb -> {len(full_grid)} full configs, "
+          f"using {n_configs}", flush=True)
+
+    # Load all three ChArUco source datasets. Each gives (mp4, episodes, action, state).
+    per_position: dict[str, tuple[Path, list[SourceEpisodeMeta], np.ndarray, np.ndarray]] = {}
+    for pos in POSITIONS:
+        src = load_source_episodes(Path(args.source_root), pos)
+        per_position[pos] = src
+        print(f"[{out_name}] source[{pos}]: {src[0].name}  "
+              f"{len(src[1])} episodes, {len(src[2])} frames total", flush=True)
+
+    board, dictionary = build_board(
+        BOARD_SQUARES_X, BOARD_SQUARES_Y, BOARD_SQUARE_MM, BOARD_MARKER_RATIO, BOARD_DICT,
+    )
+    detector = aruco.ArucoDetector(dictionary, aruco.DetectorParameters())
+    char_detector = aruco.CharucoDetector(board)
+    masker = RedHSVMasker(HSV_LO, HSV_HI)
+
+    # Homography cache keyed by (position, source_episode_index).
+    h_cache: dict[tuple[str, int], list[np.ndarray | None]] = {}
+
+    def get_homographies(pos: str, src_ep_idx: int, first_frame: np.ndarray) -> list[np.ndarray | None]:
+        key = (pos, src_ep_idx)
+        if key not in h_cache:
+            Hs, _infos = lock_homographies_multi(first_frame, detector, char_detector, board, n_boards=3)
+            h_cache[key] = Hs
+        return h_cache[key]
+
+    from lerobot.datasets.lerobot_dataset import LeRobotDataset
+
+    repo_id = f"{args.hub_org}/{out_name}" if args.push_to_hub else out_name
+    dataset = LeRobotDataset.create(
+        repo_id=repo_id,
+        fps=30,
+        features=deepcopy(FEATURES_SCHEMA),
+        root=out_dir,
+        robot_type="so_follower",
+        use_videos=True,
+        vcodec=args.vcodec,
+        streaming_encoding=True,
+    )
+
+    n_eps_total = len(configs)
+    n_eps_done = 0
+    n_frames_done = 0
+    fps = 30.0
+    # Per-position episode cycling counter (so each source position uses its
+    # 10 episodes evenly).
+    n_used_per_pos = {pos: 0 for pos in POSITIONS}
+    per_position_eps = {pos: per_position[pos][1] for pos in POSITIONS}
+
+    for ci, cfg in enumerate(configs):
+        pos = cfg.target_position
+        src_mp4, src_episodes, src_action, src_state = per_position[pos]
+        n_source = len(src_episodes)
+        src_idx = n_used_per_pos[pos] % n_source
+        n_used_per_pos[pos] += 1
+        src = src_episodes[src_idx]
+
+        frames = read_episode_frames(src_mp4, src, fps)
+        action_slice = src_action[src.from_frame_global: src.to_frame_global]
+        state_slice = src_state[src.from_frame_global: src.to_frame_global]
+        assert len(frames) == len(action_slice) == len(state_slice) == src.length, (
+            f"length mismatch pos={pos} ep{src.episode_index}: "
+            f"frames={len(frames)} act={len(action_slice)} st={len(state_slice)} L={src.length}"
+        )
+
+        layout = _board_layout(pos, cfg.other1_celeb, cfg.other2_celeb, cfg.other_swap)
+        target_idx = POSITION_TO_BOARD_IDX[pos]
+        photo_idx_per_slot = [None, None, None]
+        photo_idx_per_slot[target_idx] = cfg.target_photo_idx
+        other_slots = [i for i in range(3) if i != target_idx]
+        if cfg.other_swap:
+            other_slots = other_slots[::-1]
+        photo_idx_per_slot[other_slots[0]] = cfg.other1_photo_idx
+        photo_idx_per_slot[other_slots[1]] = cfg.other2_photo_idx
+        layout[target_idx] = target_celeb
+        tiles = [tile_cache.get(layout[i], photo_idx_per_slot[i]) for i in range(3)]
+
+        Hs = get_homographies(pos, src_idx, frames[0])
+        if all(H is None for H in Hs):
+            print(f"[{out_name}] WARN ep{ci}: source pos={pos} ep{src.episode_index} "
+                  f"had no board locks; skipping", flush=True)
+            continue
+
+        for fi, frame in enumerate(frames):
+            composed = compose_multi(
+                frame, tiles, Hs, BOARD_W_MM, BOARD_H_MM, BOARD_CHROMA_MM,
+                HSV_LO, HSV_HI, masker=masker,
+            )
+            composed = _apply_global_lift(composed, **args.global_lift_args)
+            composed_rgb = cv2.cvtColor(composed, cv2.COLOR_BGR2RGB)
+            dataset.add_frame({
+                "observation.images.front": composed_rgb,
+                "observation.state": state_slice[fi],
+                "action": action_slice[fi],
+                "task": canonical_task,
+            })
+        dataset.save_episode()
+        n_eps_done += 1
+        n_frames_done += src.length
+        if n_eps_done % 25 == 0 or n_eps_done == n_eps_total:
+            elapsed = time.time() - t0
+            fps_compose = n_frames_done / max(elapsed, 1e-6)
+            eta = (n_eps_total - n_eps_done) * elapsed / max(n_eps_done, 1)
+            print(f"[{out_name}] {n_eps_done}/{n_eps_total} eps "
+                  f"({n_frames_done} frames, {fps_compose:.1f} fps, "
+                  f"eta {eta / 60:.1f} min)  pos_counts={n_used_per_pos}", flush=True)
+
+    dataset.finalize()
+    elapsed = time.time() - t0
+    summary = {
+        "name": out_name,
+        "skipped": False,
+        "balanced": True,
+        "n_episodes": n_eps_done,
+        "n_frames": n_frames_done,
+        "elapsed_s": round(elapsed, 1),
+        "out_dir": str(out_dir),
+        "disk_mb": round(_dir_size_mb(out_dir), 1),
+        "position_episode_counts": dict(n_used_per_pos),
+    }
+
+    if args.push_to_hub:
+        upload_info = _push_to_hub(out_dir, repo_id)
+        summary["hub_url"] = upload_info["hub_url"]
+        summary["upload_elapsed_s"] = upload_info["elapsed_s"]
+
+    print(f"[{out_name}] DONE — {summary}", flush=True)
+    return summary
+
+
 def _dir_size_mb(p: Path) -> float:
     total = 0
     for f in p.rglob("*"):
@@ -624,48 +878,79 @@ def _push_to_hub(local_dir: Path, repo_id: str) -> dict:
 
 def _dry_run(
     targets: list[tuple[str, str]], n_configs: int, source_root: Path,
-    celebrity_jsons: list[Path], output_suffix: str,
+    celebrity_jsons: list[Path], output_suffix: str, balanced: bool = False,
+    output_version: str = "v3",
 ) -> None:
     """Print the plan without writing anything."""
     pool, n_photos = load_celebrity_pool(celebrity_jsons)
-    full_grid_size = n_photos ** 3 * 2
+    full_grid_size = (3 if balanced else 1) * n_photos ** 3 * 2
     effective = full_grid_size if n_configs < 0 else min(n_configs, full_grid_size)
     suffix = f"_{output_suffix}" if output_suffix else ""
     print("=" * 72)
-    print(f"DRY RUN — {len(targets)} datasets x {effective} eps = "
+    mode_str = "balanced (Fix A: language-forcing)" if balanced else "per-slot (v3 legacy)"
+    print(f"DRY RUN ({mode_str}) — {len(targets)} datasets x {effective} eps = "
           f"{len(targets) * effective} total")
     print(f"  celebrity_jsons : {[str(p) for p in celebrity_jsons]}")
     print(f"  n_photos/celeb  : {n_photos}  ({', '.join(f'{s}={len(pool[s])}' for s in pool)})")
-    print(f"  full grid size  : {full_grid_size}  (= {n_photos}^3 * 2)")
+    grid_formula = f"3 * {n_photos}^3 * 2" if balanced else f"{n_photos}^3 * 2"
+    print(f"  full grid size  : {full_grid_size}  (= {grid_formula})")
     print(f"  using           : {effective} configs/dataset")
     print(f"  output suffix   : {suffix!r}")
+    print(f"  output version  : {output_version}")
     print("=" * 72)
     for celeb, pos in targets:
-        out_name = f"dataset_v3_synth{suffix}_{celeb}_{pos}_2"
-        task = f"Place the coke on {CANONICAL_NAME[celeb]}"
-        configs = build_config_grid(celeb, pos, n_photos_per_celeb=n_photos)[:effective]
-        src_ds = source_root / f"dataset_v3_charuco_{pos}_2"
-        exists = "OK" if src_ds.is_dir() else "MISSING"
-        print(f"\n{out_name}  ({effective} eps, task='{task}')")
-        print(f"  source: {src_ds.name}  [{exists}]")
-        print(f"  sample configs (first 3 + last):")
-        for c in configs[:3] + ([configs[-1]] if len(configs) > 3 else []):
-            print(f"    target=({c.target_celeb},photo={c.target_photo_idx})  "
-                  f"other1=({c.other1_celeb},photo={c.other1_photo_idx})  "
-                  f"other2=({c.other2_celeb},photo={c.other2_photo_idx})  "
-                  f"swap={c.other_swap}")
+        if balanced:
+            if output_version == "v4":
+                out_name = f"dataset_v4_synth{suffix}_{celeb}_balanced_1"
+            else:
+                out_name = f"dataset_v3_synth{suffix}_{celeb}_balanced_2"
+            task = f"Place the coke on {CANONICAL_NAME[celeb]}"
+            configs = build_balanced_config_grid(celeb, n_photos_per_celeb=n_photos)[:effective]
+            src_dirs = [source_root / f"dataset_v3_charuco_{p}_2" for p in POSITIONS]
+            src_status = {p: ("OK" if d.is_dir() else "MISSING")
+                          for p, d in zip(POSITIONS, src_dirs)}
+            print(f"\n{out_name}  ({effective} eps, task='{task}')")
+            print(f"  sources: " + "  ".join(f"{p}=[{src_status[p]}]" for p in POSITIONS))
+            # Show first config per slot.
+            print(f"  sample configs (1 per slot):")
+            seen_slots: set[str] = set()
+            for c in configs:
+                if c.target_position in seen_slots:
+                    continue
+                seen_slots.add(c.target_position)
+                print(f"    target=({c.target_celeb}@{c.target_position},photo={c.target_photo_idx})  "
+                      f"other1=({c.other1_celeb},photo={c.other1_photo_idx})  "
+                      f"other2=({c.other2_celeb},photo={c.other2_photo_idx})  "
+                      f"swap={c.other_swap}")
+                if len(seen_slots) == 3:
+                    break
+        else:
+            out_name = f"dataset_v3_synth{suffix}_{celeb}_{pos}_2"
+            task = f"Place the coke on {CANONICAL_NAME[celeb]}"
+            configs = build_config_grid(celeb, pos, n_photos_per_celeb=n_photos)[:effective]
+            src_ds = source_root / f"dataset_v3_charuco_{pos}_2"
+            exists = "OK" if src_ds.is_dir() else "MISSING"
+            print(f"\n{out_name}  ({effective} eps, task='{task}')")
+            print(f"  source: {src_ds.name}  [{exists}]")
+            print(f"  sample configs (first 3 + last):")
+            for c in configs[:3] + ([configs[-1]] if len(configs) > 3 else []):
+                print(f"    target=({c.target_celeb},photo={c.target_photo_idx})  "
+                      f"other1=({c.other1_celeb},photo={c.other1_photo_idx})  "
+                      f"other2=({c.other2_celeb},photo={c.other2_photo_idx})  "
+                      f"swap={c.other_swap}")
     print()
 
 
 def _worker_wrapper(args: WorkerArgs) -> dict:
     """Catches exceptions so one worker failure doesn't kill the pool."""
+    fn = generate_one_balanced_dataset if args.balanced else generate_one_dataset
+    label = f"{args.target_celeb}_{'balanced' if args.balanced else args.target_position}"
     try:
-        return generate_one_dataset(args)
+        return fn(args)
     except SystemExit as e:
-        return {"name": f"{args.target_celeb}_{args.target_position}",
-                "error": f"SystemExit({e})", "skipped": True}
+        return {"name": label, "error": f"SystemExit({e})", "skipped": True}
     except Exception as e:
-        return {"name": f"{args.target_celeb}_{args.target_position}",
+        return {"name": label,
                 "error": f"{type(e).__name__}: {e}",
                 "traceback": traceback.format_exc(), "skipped": True}
 
@@ -695,6 +980,17 @@ def main() -> None:
                     help="Tag for the output dataset name. Empty (default) = "
                          "'dataset_v3_synth_<celeb>_<pos>_2'. Set e.g. 'ood' or 'mix' "
                          "to write 'dataset_v3_synth_ood_<celeb>_<pos>_2' alongside ID-only outputs.")
+    ap.add_argument("--balanced", action="store_true",
+                    help="Fix A: emit ONE balanced dataset per celebrity (3 outputs total) "
+                         "whose episodes cover all three placement slots. Breaks the "
+                         "action=f(slot) shortcut that lets v9 ChArUco SmolVLA ignore "
+                         "the language token (see docs/eval3/charuco_pipeline.md:281 + "
+                         "tools/eval3_diagnose_celeb_confusion.py). Action source is "
+                         "matched to where the named celebrity is placed.")
+    ap.add_argument("--output-version", choices=("v3", "v4"), default="v3",
+                    help="Naming convention for outputs. 'v3' (default) keeps the "
+                         "legacy 'dataset_v3_synth_*_2' prefix; 'v4' writes "
+                         "'dataset_v4_synth_*_1' (recommended with --balanced).")
     ap.add_argument("--vcodec", default="h264",
                     help="Video codec for output MP4s (default h264, matches source). "
                          "Use 'libsvtav1' for smaller files at the cost of decode speed.")
@@ -727,22 +1023,35 @@ def main() -> None:
 
     celebs = [s.strip() for s in args.target_celebs.split(",") if s.strip()]
     positions = [s.strip() for s in args.target_positions.split(",") if s.strip()]
-    targets = [(c, p) for c in celebs for p in positions]
+    if args.balanced:
+        # One output per celebrity; --target-positions is ignored (every output
+        # spans all 3 slots internally). Keep a dummy "balanced" position string
+        # so existing code paths still see a (celeb, pos) tuple.
+        targets = [(c, "balanced") for c in celebs]
+    else:
+        targets = [(c, p) for c in celebs for p in positions]
     celebrity_jsons = [Path(s.strip()) for s in args.celebrity_json.split(",") if s.strip()]
 
     if args.dry_run:
         _dry_run(targets, args.n_configs_per_dataset, args.source_root,
-                 celebrity_jsons, args.output_suffix)
+                 celebrity_jsons, args.output_suffix, balanced=args.balanced,
+                 output_version=args.output_version)
         return
 
     # Validate inputs early.
     for jp in celebrity_jsons:
         if not jp.is_file():
             sys.exit(f"--celebrity-json entry missing: {jp}")
-    for c, p in targets:
-        src_ds = args.source_root / f"dataset_v3_charuco_{p}_2"
-        if not src_ds.is_dir():
-            sys.exit(f"source dataset missing: {src_ds}")
+    if args.balanced:
+        for p in POSITIONS:
+            src_ds = args.source_root / f"dataset_v3_charuco_{p}_2"
+            if not src_ds.is_dir():
+                sys.exit(f"source dataset missing (balanced needs all 3): {src_ds}")
+    else:
+        for c, p in targets:
+            src_ds = args.source_root / f"dataset_v3_charuco_{p}_2"
+            if not src_ds.is_dir():
+                sys.exit(f"source dataset missing: {src_ds}")
 
     blend_args = dict(
         contrast=args.blend_contrast,
@@ -773,6 +1082,8 @@ def main() -> None:
             hub_org=args.hub_org,
             overwrite=args.overwrite,
             output_suffix=args.output_suffix,
+            balanced=args.balanced,
+            output_version=args.output_version,
         )
         for c, p in targets
     ]

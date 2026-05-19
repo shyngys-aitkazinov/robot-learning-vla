@@ -18,6 +18,15 @@
 #   EVAL3_SYNTH_OUTPUT_SUFFIX — tag appended to output names (default empty).
 #                                Use 'ood' or 'mix' to write a parallel set of datasets
 #                                alongside the ID-only ones.
+#   EVAL3_SYNTH_BALANCED      — 0/1 (default 0). When 1, emit Fix A "language-forcing"
+#                                balanced datasets: ONE per celebrity (3 outputs total),
+#                                spanning all three placement slots, so the action label
+#                                varies WITHIN the dataset and the trainer cannot
+#                                shortcut on action = f(slot). Implies --target-positions
+#                                is ignored. See tools/eval3_diagnose_celeb_confusion.py
+#                                for the root-cause proof.
+#   EVAL3_SYNTH_OUTPUT_VERSION — v3 (default) or v4. Use v4 when --balanced=1 so the
+#                                outputs go to dataset_v4_synth_<celeb>_balanced_1.
 #
 # Usage:
 #   ./scripts/run_eval3_synth_dataset_gen.sh                       # full local
@@ -27,6 +36,11 @@
 #     EVAL3_SYNTH_N_CONFIGS=5 \
 #     ./scripts/run_eval3_synth_dataset_gen.sh                      # 5-ep smoke
 #   ./scripts/run_eval3_synth_dataset_gen.sh --dry-run             # plan only
+#
+#   # Fix A: generate the 3 v4 balanced datasets and push to Hub:
+#   EVAL3_SYNTH_BALANCED=1 EVAL3_SYNTH_OUTPUT_VERSION=v4 \
+#     EVAL3_SYNTH_WORKERS=3 EVAL3_SYNTH_PUSH_TO_HUB=1 \
+#     ./scripts/run_eval3_synth_dataset_gen.sh
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -38,11 +52,13 @@ WORKERS="${EVAL3_SYNTH_WORKERS:-1}"
 PUSH="${EVAL3_SYNTH_PUSH_TO_HUB:-0}"
 CELEBS="${EVAL3_SYNTH_CELEBS:-taylor_swift,barack_obama,yann_lecun}"
 POSITIONS="${EVAL3_SYNTH_POSITIONS:-left,middle,right}"
-N_CONFIGS="${EVAL3_SYNTH_N_CONFIGS:--1}"  # -1 = full N*N*N*2 grid (250 for ID-only, 2000 for ID+OOD)
+N_CONFIGS="${EVAL3_SYNTH_N_CONFIGS:--1}"  # -1 = full grid (250 for ID-only / 750 for --balanced)
 VCODEC="${EVAL3_SYNTH_VCODEC:-h264}"
 OVERWRITE="${EVAL3_SYNTH_OVERWRITE:-0}"
 CELEB_JSON="${EVAL3_SYNTH_CELEB_JSON:-datasets/in-distribution-eval-3.json}"
 OUTPUT_SUFFIX="${EVAL3_SYNTH_OUTPUT_SUFFIX:-}"
+BALANCED="${EVAL3_SYNTH_BALANCED:-0}"
+OUTPUT_VERSION="${EVAL3_SYNTH_OUTPUT_VERSION:-v3}"
 
 ARGS=(
   --celebrity-json "$CELEB_JSON"
@@ -54,20 +70,24 @@ ARGS=(
   --vcodec "$VCODEC"
   --n-workers "$WORKERS"
   --output-suffix "$OUTPUT_SUFFIX"
+  --output-version "$OUTPUT_VERSION"
 )
 [[ "$PUSH" == "1" ]] && ARGS+=(--push-to-hub)
 [[ "$OVERWRITE" == "1" ]] && ARGS+=(--overwrite)
+[[ "$BALANCED" == "1" ]] && ARGS+=(--balanced)
 
 echo ">> Eval 3 synth dataset gen"
-echo "   workers       : $WORKERS"
-echo "   push-to-hub   : $PUSH"
-echo "   celebs        : $CELEBS"
-echo "   positions     : $POSITIONS"
-echo "   n_configs/ds  : $N_CONFIGS (-1 = full grid)"
-echo "   vcodec        : $VCODEC"
-echo "   overwrite     : $OVERWRITE"
-echo "   celeb_jsons   : $CELEB_JSON"
-echo "   output_suffix : '$OUTPUT_SUFFIX'"
+echo "   workers        : $WORKERS"
+echo "   push-to-hub    : $PUSH"
+echo "   celebs         : $CELEBS"
+echo "   positions      : $POSITIONS (ignored when balanced=1)"
+echo "   n_configs/ds   : $N_CONFIGS (-1 = full grid)"
+echo "   vcodec         : $VCODEC"
+echo "   overwrite      : $OVERWRITE"
+echo "   celeb_jsons    : $CELEB_JSON"
+echo "   output_suffix  : '$OUTPUT_SUFFIX'"
+echo "   output_version : $OUTPUT_VERSION"
+echo "   balanced       : $BALANCED  (Fix A: language-forcing layout)"
 echo ""
 
 exec python tools/eval3_synth_dataset_gen.py "${ARGS[@]}" "$@"

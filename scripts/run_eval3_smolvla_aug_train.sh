@@ -139,7 +139,12 @@ echo "   output dir            : $OUT"
 # The 4 new entries (perspective, resized_crop, gaussian_blur, erase) extend the
 # existing 6 (brightness, contrast, saturation, hue, sharpness, affine).
 # Bumped max_num_transforms 3 -> 4 to sample up to 4 transforms per step.
-TFS_JSON='{"brightness":{"weight":2.0,"type":"ColorJitter","kwargs":{"brightness":[0.6,1.4]}},"contrast":{"weight":2.0,"type":"ColorJitter","kwargs":{"contrast":[0.6,1.4]}},"saturation":{"weight":1.0,"type":"ColorJitter","kwargs":{"saturation":[0.5,1.5]}},"hue":{"weight":1.0,"type":"ColorJitter","kwargs":{"hue":[-0.05,0.05]}},"sharpness":{"weight":1.0,"type":"SharpnessJitter","kwargs":{"sharpness":[0.5,1.5]}},"affine":{"weight":1.0,"type":"RandomAffine","kwargs":{"degrees":[-3.0,3.0],"translate":[0.03,0.03]}},"perspective":{"weight":1.5,"type":"RandomPerspective","kwargs":{"distortion_scale":0.2,"p":0.5}},"resized_crop":{"weight":1.0,"type":"RandomResizedCrop","kwargs":{"size":[480,640],"scale":[0.75,1.0],"ratio":[0.95,1.05]}},"gaussian_blur":{"weight":0.5,"type":"GaussianBlur","kwargs":{"kernel_size":[5,9],"sigma":[0.3,2.0]}},"erase":{"weight":0.5,"type":"RandomErasing","kwargs":{"p":0.3,"scale":[0.02,0.1]}}}'
+#
+# Override per-run by exporting EVAL3_TFS_JSON. v10 (Fix C of the celebrity
+# confusion plan) uses a face-preserving variant that shrinks RandomErasing /
+# RandomPerspective magnitudes and tightens brightness/contrast ranges.
+DEFAULT_TFS_JSON='{"brightness":{"weight":2.0,"type":"ColorJitter","kwargs":{"brightness":[0.6,1.4]}},"contrast":{"weight":2.0,"type":"ColorJitter","kwargs":{"contrast":[0.6,1.4]}},"saturation":{"weight":1.0,"type":"ColorJitter","kwargs":{"saturation":[0.5,1.5]}},"hue":{"weight":1.0,"type":"ColorJitter","kwargs":{"hue":[-0.05,0.05]}},"sharpness":{"weight":1.0,"type":"SharpnessJitter","kwargs":{"sharpness":[0.5,1.5]}},"affine":{"weight":1.0,"type":"RandomAffine","kwargs":{"degrees":[-3.0,3.0],"translate":[0.03,0.03]}},"perspective":{"weight":1.5,"type":"RandomPerspective","kwargs":{"distortion_scale":0.2,"p":0.5}},"resized_crop":{"weight":1.0,"type":"RandomResizedCrop","kwargs":{"size":[480,640],"scale":[0.75,1.0],"ratio":[0.95,1.05]}},"gaussian_blur":{"weight":0.5,"type":"GaussianBlur","kwargs":{"kernel_size":[5,9],"sigma":[0.3,2.0]}},"erase":{"weight":0.5,"type":"RandomErasing","kwargs":{"p":0.3,"scale":[0.02,0.1]}}}'
+TFS_JSON="${EVAL3_TFS_JSON:-$DEFAULT_TFS_JSON}"
 
 # IMPORTANT: lerobot's TrainPipelineConfig defaults use_policy_training_preset=true,
 # which replaces our CLI optimizer/scheduler overrides with the SmolVLA preset

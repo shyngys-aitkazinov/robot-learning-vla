@@ -319,6 +319,18 @@ def apply_concat_patch() -> None:
             lecun_filter = _parse_filter("EVAL3_LECUN_EPISODE_FILTER")
             obama_filter = _parse_filter("EVAL3_OBAMA_EPISODE_FILTER")
 
+            # Fix B (v9 celeb-confusion plan): cap synth episode count so the
+            # real new66 corpus is not buried at ~3% of the training mix.
+            # Caps each synth-named repo to the first N episodes. 0 / unset = no cap.
+            try:
+                synth_episode_limit = int(os.environ.get("EVAL3_SYNTH_EPISODE_LIMIT", "0"))
+            except ValueError:
+                synth_episode_limit = 0
+            try:
+                synth_max_frames_per_ep = int(os.environ.get("EVAL3_SYNTH_MAX_FRAMES_PER_EP", "0"))
+            except ValueError:
+                synth_max_frames_per_ep = 0
+
             def _parse_repo_episode_map(env_var: str) -> dict[str, set[int]]:
                 """Parse 'repo_slug:0,1;other_repo:3' into {repo_slug: {episodes}}."""
                 raw = os.environ.get(env_var, "").strip()
@@ -386,6 +398,15 @@ def apply_concat_patch() -> None:
                 at the placement pose and must NOT be truncated."""
                 return "dataset_v2" in repo.lower()
 
+            def _is_synth_data(repo: str) -> bool:
+                """True for synthetic ChArUco-derived repos (``dataset_v3_synth_*``
+                or ``dataset_v4_synth_*``). Used by Fix B (rebalance real vs synth)
+                of the v9 celeb-confusion plan to cap synth volume without touching
+                legacy or new66 episode filters.
+                """
+                rl = repo.lower()
+                return "dataset_v3_synth" in rl or "dataset_v4_synth" in rl
+
             def _repo_name(repo: str) -> str:
                 return repo.rsplit("/", 1)[-1]
 
@@ -396,26 +417,60 @@ def apply_concat_patch() -> None:
                         return slot
                 return ""
 
+            def _print_shuffle_mask_paths(slug: str, slot: str, new_data: bool) -> tuple[str, str]:
+                """v1 masks are per-celebrity with a fixed target slot; v2 needs slot_* masks."""
+                if new_data and slot:
+                    base = os.path.join(mask_dir, f"slot_{slot}")
+                else:
+                    base = os.path.join(mask_dir, slug)
+                return os.path.join(base, "other1_mask.npy"), os.path.join(base, "other2_mask.npy")
+
             prep_datasets = []
             for d in datasets:
                 slug = _slug_from_repo(d.repo_id)
                 new_data = _is_new_data(d.repo_id)
+                synth_data = _is_synth_data(d.repo_id)
                 slot = _slot_from_repo(d.repo_id) if new_data else ""
                 bg_aug = None
                 print_aug = None
-                if slug and bg_replace_enabled:
+                # Fix D (v9 celeb-confusion plan): synth/charuco repos use
+                # composited celebrity boards whose pixel geometry does NOT match
+                # outputs/eval3_masks/<slug>/ (which was extracted from legacy
+                # real-print recordings — see tools/eval3_extract_masks.py:14-16).
+                # Silently applying bg-replace or print-shuffle to a synth repo
+                # can scribble over the wrong region and corrupt action-image
+                # alignment without warning. Skip both augmenters for synth.
+                if slug and bg_replace_enabled and not synth_data:
                     bg_mask_path = os.path.join(mask_dir, slug, "bg_mask.npy")
                     if os.path.exists(bg_mask_path) and os.path.isdir(bg_dir):
                         bg_aug = BackgroundReplaceAugmenter(bg_mask_path, bg_dir, p=bg_p, seed=hash(slug) & 0xFFFF)
                     else:
                         logging.warning("eval3_concat_patch: %s bg-aug skipped (missing mask or bg dir)", slug)
-                if slug and print_shuffle_enabled:
-                    o1 = os.path.join(mask_dir, slug, "other1_mask.npy")
-                    o2 = os.path.join(mask_dir, slug, "other2_mask.npy")
+                elif synth_data and bg_replace_enabled:
+                    logging.info(
+                        "eval3_concat_patch: %s bg-aug skipped (synth/charuco repo; "
+                        "extracted bg_mask.npy targets legacy real-print geometry only)",
+                        d.repo_id,
+                    )
+                if slug and print_shuffle_enabled and not synth_data:
+                    o1, o2 = _print_shuffle_mask_paths(slug, slot, new_data)
                     if os.path.exists(o1) and os.path.exists(o2):
-                        print_aug = PrintShuffleAugmenter(o1, o2, p=ps_p, seed=(hash(slug) >> 16) & 0xFFFF)
+                        seed_key = f"{slug}:{slot}" if slot else slug
+                        print_aug = PrintShuffleAugmenter(
+                            o1, o2, p=ps_p, seed=(hash(seed_key) >> 16) & 0xFFFF
+                        )
                     else:
-                        logging.warning("eval3_concat_patch: %s print-shuffle skipped (missing masks)", slug)
+                        logging.warning(
+                            "eval3_concat_patch: %s print-shuffle skipped (missing masks at %s)",
+                            d.repo_id,
+                            os.path.dirname(o1),
+                        )
+                elif synth_data and print_shuffle_enabled:
+                    logging.info(
+                        "eval3_concat_patch: %s print-shuffle skipped (synth/charuco repo; "
+                        "extracted other{1,2}_mask.npy target legacy real-print geometry only)",
+                        d.repo_id,
+                    )
 
                 # Episode filter:
                 #   - new data: EVAL3_NEW_EPISODE_KEEP overrides everything (only keep listed).
@@ -434,6 +489,13 @@ def apply_concat_patch() -> None:
                         ep_filter = sorted(kept)
                     elif excluded:
                         ep_filter = [i for i in range(int(d.num_episodes)) if i not in excluded]
+                    else:
+                        ep_filter = None
+                elif synth_data:
+                    # Fix B: synth repos get their own cap so we don't have to
+                    # use the celebrity filters (which also affect old data).
+                    if synth_episode_limit and synth_episode_limit > 0:
+                        ep_filter = list(range(min(synth_episode_limit, int(d.num_episodes))))
                     else:
                         ep_filter = None
                 else:
@@ -456,9 +518,17 @@ def apply_concat_patch() -> None:
                 repair_this_gripper = bool(
                     gripper_repair_enabled and (new_data or not gripper_repair_new_only)
                 )
+                # Fix B: optional per-synth tighter frame cap to further
+                # downweight synth volume vs real new66.
+                effective_max_frames = max_frames
+                if synth_data and synth_max_frames_per_ep > 0:
+                    effective_max_frames = (
+                        synth_max_frames_per_ep if max_frames is None
+                        else min(int(max_frames), synth_max_frames_per_ep)
+                    )
                 w = Eval3PrepDataset(
                     d,
-                    max_frames_per_episode=max_frames,
+                    max_frames_per_episode=effective_max_frames,
                     task_aug_fn=ds_task_aug,
                     bg_aug_fn=bg_aug,
                     print_aug_fn=print_aug,
