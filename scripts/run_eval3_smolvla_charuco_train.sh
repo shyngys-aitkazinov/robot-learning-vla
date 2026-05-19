@@ -55,6 +55,15 @@ export EVAL3_GRIPPER_REPAIR="${EVAL3_GRIPPER_REPAIR:-0}"
 export EVAL3_ACTION_SMOOTH_WINDOW="${EVAL3_ACTION_SMOOTH_WINDOW:-0}"
 export EVAL3_ACTION_SMOOTH_GRIPPER="${EVAL3_ACTION_SMOOTH_GRIPPER:-0}"
 
+# The called v6/v8 wrapper sets legacy old-data episode filters by default for
+# taylor_swift/yann_lecun/barack_obama repos. Synthetic repos are not dataset_v2,
+# so they would otherwise be treated like old data and keep only 14/4/4 episodes.
+# Make those filters explicit all-episode filters for the 250-episode synth repos.
+ALL_SYNTH_EPISODES="$(seq -s, 0 249)"
+export EVAL3_SWIFT_EPISODE_FILTER="${EVAL3_SWIFT_EPISODE_FILTER:-$ALL_SYNTH_EPISODES}"
+export EVAL3_LECUN_EPISODE_FILTER="${EVAL3_LECUN_EPISODE_FILTER:-$ALL_SYNTH_EPISODES}"
+export EVAL3_OBAMA_EPISODE_FILTER="${EVAL3_OBAMA_EPISODE_FILTER:-$ALL_SYNTH_EPISODES}"
+
 # The original image-transform stack remains enabled in the called wrapper.
 # Disable optional mask-based local augmenters unless explicitly requested,
 # because Brev training nodes do not necessarily have the generated masks.
