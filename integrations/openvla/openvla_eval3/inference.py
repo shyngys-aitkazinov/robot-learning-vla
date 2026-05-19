@@ -53,6 +53,21 @@ def load_openvla(
     return processor, vla
 
 
+def _tensor_to_pil(image) -> Image.Image:
+    if isinstance(image, Image.Image):
+        return image.convert("RGB")
+    x = torch.as_tensor(image)
+    if x.ndim != 3:
+        raise ValueError(f"Expected HxWx3 or CxHxW image, got shape {tuple(x.shape)}")
+    if x.shape[0] == 3 and x.shape[-1] != 3:
+        x = x.permute(1, 2, 0)
+    if x.dtype != torch.uint8:
+        if float(x.max()) <= 2.0:
+            x = (x * 255.0).round()
+        x = x.clamp(0, 255).to(torch.uint8)
+    return Image.fromarray(x.detach().cpu().numpy())
+
+
 def build_inputs(
     processor,
     *,
@@ -62,10 +77,39 @@ def build_inputs(
     torch_dtype: torch.dtype,
 ):
     image = Image.open(image_path).convert("RGB")
+    return _processor_inputs(processor, prompt=prompt, image=image, device=device, torch_dtype=torch_dtype)
+
+
+def build_inputs_from_image(
+    processor,
+    *,
+    prompt: str,
+    image,
+    device: torch.device,
+    torch_dtype: torch.dtype,
+):
+    """Build model inputs from a PIL image or HWC/CHW tensor (robot camera frame)."""
+    return _processor_inputs(
+        processor,
+        prompt=prompt,
+        image=_tensor_to_pil(image),
+        device=device,
+        torch_dtype=torch_dtype,
+    )
+
+
+def _processor_inputs(
+    processor,
+    *,
+    prompt: str,
+    image: Image.Image,
+    device: torch.device,
+    torch_dtype: torch.dtype,
+):
     try:
         inputs = processor(text=prompt, images=image, return_tensors="pt")
     except TypeError:
-        inputs = processor(prompt, image, return_tensors="pt")
+        inputs = processor(prompt, image, return_tensors="pt")  # type: ignore[arg-type]
     # Normalize to tensor dict on device
     out = {}
     if hasattr(inputs, "items"):
