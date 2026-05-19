@@ -135,7 +135,6 @@ def _check_env(errors: list[str]) -> None:
     expected = {
         "EVAL3_MAX_FRAMES_PER_EP": "0",
         "EVAL3_TASK_AUG": "1",
-        "EVAL3_TASK_AUG_CANONICAL_P": "1.0",
         "EVAL3_BG_REPLACE": "0",
         "EVAL3_PRINT_SHUFFLE": "0",
     }
@@ -143,6 +142,19 @@ def _check_env(errors: list[str]) -> None:
         actual = os.environ.get(key)
         if actual != expected_value:
             errors.append(f"{key}={actual!r}; expected {expected_value!r}")
+
+    # EVAL3_TASK_AUG_CANONICAL_P is intentionally tunable since the
+    # language-augmentation feature landed (the aux_head_playbook recommends
+    # 0.7 = 70% canonical wording). Validate it's a probability rather than
+    # strict-equal to 1.0.
+    canon_p = os.environ.get("EVAL3_TASK_AUG_CANONICAL_P")
+    if canon_p is not None:
+        try:
+            v = float(canon_p)
+            if not (0.0 <= v <= 1.0):
+                errors.append(f"EVAL3_TASK_AUG_CANONICAL_P={canon_p!r}; must be in [0, 1]")
+        except ValueError:
+            errors.append(f"EVAL3_TASK_AUG_CANONICAL_P={canon_p!r}; not a float")
 
     for key in ("EVAL3_SWIFT_EPISODE_FILTER", "EVAL3_LECUN_EPISODE_FILTER", "EVAL3_OBAMA_EPISODE_FILTER"):
         if os.environ.get(key):

@@ -53,7 +53,10 @@ from lerobot.utils.logging_utils import MetricsTracker  # noqa: E402
 from eval3_abcd_benchmark import load_policy_bundle  # noqa: E402
 
 
-DEVICE = "mps"
+DEVICE = os.environ.get(
+    "EVAL3_AUX_TEST_DEVICE",
+    "cuda" if torch.cuda.is_available() else "mps",
+)
 CKPT = "RobotLearningVLA/eval3-smolvla-3way-25k-b128-v6-synth-step15k"
 STATS_REPO = "RobotLearningVLA/dataset_v3_synth_yann_lecun_left_2"
 
@@ -78,6 +81,7 @@ def make_batch(repos_and_labels, frame_idx=200):
             episodes=[0],
             revision="v3.0",
             delta_timestamps={"action": [i / 30 for i in range(model.config.chunk_size)]},
+            video_backend="pyav",
         )
         rows.append(ds[frame_idx])
         labels.append(label)
@@ -168,6 +172,7 @@ ds_lecun = LeRobotDataset(
     "RobotLearningVLA/dataset_v3_synth_yann_lecun_left_2",
     episodes=[0],
     revision="v3.0",
+    video_backend="pyav",
 )
 row = ds_lecun[200]
 inf_batch = {k: (v.unsqueeze(0).to(device) if isinstance(v, torch.Tensor) else [v]) for k, v in row.items()}

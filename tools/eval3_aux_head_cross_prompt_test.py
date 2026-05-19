@@ -85,7 +85,7 @@ def main() -> int:
 
     all_deltas: list[float] = []
     for label, repo, ep, frame_picks in FRAMES:
-        ds = LeRobotDataset(repo, episodes=[ep], revision="v3.0")
+        ds = LeRobotDataset(repo, episodes=[ep], revision="v3.0", video_backend="pyav")
         for fi in frame_picks:
             if fi >= len(ds):
                 continue

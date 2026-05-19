@@ -89,7 +89,8 @@ each dataset is wrapped.
 | `scripts/train_eval3_smolvla.py` | Calls `eval3_smolvla_aux_head.apply()` after `eval3_concat_patch.apply_concat_patch()` |
 | `scripts/eval3_vla_deploy.py` | Also calls `apply()` so checkpoints trained with the aux head load cleanly at deploy time |
 | `scripts/run_eval3_smolvla_v6_synth_train.sh` | Exports `EVAL3_AUX_POS_LOSS_WEIGHT` / `EVAL3_AUX_POS_DROPOUT` / `EVAL3_AUX_POS_HIDDEN` |
-| `tools/eval3_aux_head_unit_tests.py` | 10 unit tests covering every edge case (weight=0, no-label, partial-ignore, save/load round-trip, inference path, MetricsTracker integration, dtype matching). Run before/after any change. |
+| `scripts/run_eval3_smolvla_v6_pinned_idood_aux_train.sh` | Sibling launcher: same aux+state/lang/visual-aug stack, pointed at the 9 `dataset_v3_synth_pinned_idood_*_2` repos; warm-starts from `eval3-smolvla-3way-25k-b128-v6-synth-step15k`; defaults to 5k steps / batch 128 / aux weight 0.5 |
+| `tools/eval3_aux_head_unit_tests.py` | 10 unit tests covering every edge case (weight=0, no-label, partial-ignore, save/load round-trip, inference path, MetricsTracker integration, dtype matching). Run before/after any change. Device auto-detected; loads test data with `video_backend="pyav"`. |
 | `tools/eval3_aux_head_cross_prompt_test.py` | The diagnostic test: feeds 2 specific training frames through 3 prompts and reports `Δ_max(prompt)` per frame. Used to detect language-conditioning collapse. |
 
 ---
@@ -121,7 +122,7 @@ EVAL3_AUX_POS_LOSS_WEIGHT=0 ./scripts/run_eval3_smolvla_v6_synth_train.sh
 
 ## Verify the patch works
 
-### Step 1 — Unit tests (~3 min on MPS)
+### Step 1 — Unit tests (~3 min)
 
 Run before/after any change to the patch:
 
@@ -129,6 +130,11 @@ Run before/after any change to the patch:
 source .venv/bin/activate
 python tools/eval3_aux_head_unit_tests.py
 ```
+
+The test auto-detects the device (`cuda` if available, else `mps`); override
+with `EVAL3_AUX_TEST_DEVICE=cuda|mps|cpu`. On the Linux+CUDA Brev box it runs
+on CUDA. The test datasets are loaded with `video_backend="pyav"` so it does
+not depend on a working `torchcodec`/FFmpeg install.
 
 You want `ALL TESTS PASSED ✓` at the end. The 10 tests cover:
 
@@ -194,7 +200,8 @@ prompt:
 
 ```bash
 python tools/eval3_aux_head_cross_prompt_test.py \
-    --checkpoint outputs/train/eval3_aux_smoke/checkpoints/000050/pretrained_model
+    --checkpoint outputs/train/eval3_aux_smoke/checkpoints/000050/pretrained_model \
+    --device cuda    # default is mps; pass cuda on the Brev box
 ```
 
 Healthy output (model uses language):
