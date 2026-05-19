@@ -86,22 +86,25 @@ case "$CHECKPOINT_NAME" in
     ;;
   v6_synth_25k)
     POLICY_PATH="RobotLearningVLA/eval3-smolvla-3way-25k-b128-v6-synth-step25k"
-    DATASET_REPO_ID="RobotLearningVLA/taylor_swift_1"
+    # Match the training primary (per train_config.json) so ds_meta.features
+    # and the (unused but principled) dataset_stats path align with the checkpoint.
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v3_synth_taylor_swift_left_2"
     EXTRA_ARGS+=("${NO_BIASES[@]}")
     ;;
   v6_synth_15k)
     POLICY_PATH="RobotLearningVLA/eval3-smolvla-3way-25k-b128-v6-synth-step15k"
-    DATASET_REPO_ID="RobotLearningVLA/taylor_swift_1"
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v3_synth_taylor_swift_left_2"
     EXTRA_ARGS+=("${NO_BIASES[@]}")
     ;;
   v9_charuco)
     POLICY_PATH="RobotLearningVLA/eval3-vla-v9-smolvla-fresh-charuco-50k"
-    DATASET_REPO_ID="RobotLearningVLA/taylor_swift_1"
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v3_synth_taylor_swift_left_2"
     EXTRA_ARGS+=("${NO_BIASES[@]}")
     ;;
   v9_new66_charuco)
     POLICY_PATH="RobotLearningVLA/eval3-vla-v9-smolvla-fresh-new66-charuco-50k"
-    DATASET_REPO_ID="RobotLearningVLA/taylor_swift_1"
+    # v9_new66_charuco was trained on the v2 truncated corpus, not the v3 synth one.
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v2_taylor_swift_left_1_v6_truncated"
     EXTRA_ARGS+=("${NO_BIASES[@]}")
     ;;
   flower_new66)
