@@ -45,11 +45,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 import time
 import traceback
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import permutations
 from multiprocessing import Pool
 from pathlib import Path
@@ -240,13 +241,17 @@ class SourceEpisodeMeta:
     video_file: int
 
 
-def load_source_episodes(source_root: Path, position: str) -> tuple[Path, list[SourceEpisodeMeta], np.ndarray, np.ndarray]:
-    """Return (mp4_path, [SourceEpisodeMeta x 10], action_array, state_array).
+def load_source_episodes(source_root: Path, position: str, source_suffix: str = "_2") -> tuple[Path, list[SourceEpisodeMeta], np.ndarray, np.ndarray]:
+    """Return (mp4_path, [SourceEpisodeMeta x N], action_array, state_array).
 
     Joint arrays are flat (concatenated across all source episodes); use the
     per-episode from/to_frame_global indices to slice them per episode.
+
+    ``source_suffix`` (default ``_2``) selects which ChArUco recording variant
+    to read from — e.g. ``_1`` for the older capture, ``_2`` for the newer one
+    that the v3 synth corpus is built on.
     """
-    ds = source_root / f"dataset_v3_charuco_{position}_2"
+    ds = source_root / f"dataset_v3_charuco_{position}{source_suffix}"
     if not ds.is_dir():
         sys.exit(f"source dataset missing: {ds}")
     # Episodes parquet — one per chunk (we know v3 ChArUco has chunk-000 only).
@@ -425,6 +430,22 @@ class WorkerArgs:
     # within a single (task = "Place the coke on <Celeb>") dataset.
     balanced: bool = False
     output_version: str = "v3"      # "v3" -> dataset_v3_synth_*  ;  "v4" -> dataset_v4_synth_*
+    # Source/output variant — default _2 (newer captures, current corpus).
+    # The pinned generator sets both to _1 to target the older captures.
+    source_suffix: str = "_2"
+    output_postfix: str = "_2"
+    # Optional override for the config grid. When None (default), use the full
+    # build_config_grid (5^3 * 2 = 250 for N=5, 2000 for N=10). When set, the
+    # worker uses exactly this list of configs — the pinned generator passes
+    # in a 5×N pinned-distractor grid here.
+    config_grid_override: list | None = None
+    # Intra-dataset sharding. Defaults (shard_count=1, is_shard=False) preserve
+    # byte-identical behavior with the pre-sharding implementation. When N>1,
+    # _run_with_sharding builds N WorkerArgs per (celeb, position) target,
+    # each producing a distinct config slice to its own _shard_{i} dir.
+    shard_index: int = 0
+    shard_count: int = 1
+    is_shard: bool = False
 
 
 def _board_layout(target_position: str, other_celeb_1: str, other_celeb_2: str,
@@ -485,7 +506,12 @@ def generate_one_dataset(args: WorkerArgs) -> dict:
     target_position = args.target_position
     canonical_task = f"Place the coke on {CANONICAL_NAME[target_celeb]}"
     suffix = f"_{args.output_suffix}" if args.output_suffix else ""
-    out_name = f"dataset_v3_synth{suffix}_{target_celeb}_{target_position}_2"
+    out_name = f"dataset_v3_synth{suffix}_{target_celeb}_{target_position}{args.output_postfix}"
+    # When this worker is producing a shard (one slice of N), write to a
+    # _shard_{i} sibling dir. The orchestrator will merge all shards into the
+    # canonical out_name dir after the pool finishes.
+    if args.is_shard:
+        out_name = f"{out_name}_shard_{args.shard_index}"
     out_root = Path(args.out_root)
     out_dir = out_root / out_name
     if out_dir.exists():
@@ -514,15 +540,29 @@ def generate_one_dataset(args: WorkerArgs) -> dict:
         rng_seed=tile_seed,
     )
     n_photos = tile_cache.n_photos_per_celeb
-    full_grid = build_config_grid(target_celeb, target_position, n_photos_per_celeb=n_photos)
+    # Use the override grid if provided (pinned generator), else the full
+    # build_config_grid product (default _2 generator).
+    if args.config_grid_override is not None:
+        full_grid = list(args.config_grid_override)
+    else:
+        full_grid = build_config_grid(target_celeb, target_position, n_photos_per_celeb=n_photos)
     n_configs = len(full_grid) if args.n_configs < 0 else min(args.n_configs, len(full_grid))
-    configs = full_grid[:n_configs]
+    # Even-split of [0:n_configs] across args.shard_count shards. Shards 0..rem-1
+    # take base+1 configs; the rest take base. No gap, no overlap. For
+    # shard_count=1 this reduces to start=0 / end=n_configs, byte-identical to
+    # the pre-sharding `configs = full_grid[:n_configs]`.
+    base = n_configs // args.shard_count
+    rem = n_configs % args.shard_count
+    shard_start = args.shard_index * base + min(args.shard_index, rem)
+    shard_end = shard_start + base + (1 if args.shard_index < rem else 0)
+    configs = full_grid[shard_start:shard_end]
     print(f"[{out_name}] pool: {n_photos} photos/celeb -> {len(full_grid)} full configs, "
-          f"using {n_configs}", flush=True)
+          f"using {n_configs} (shard {args.shard_index + 1}/{args.shard_count}: "
+          f"configs[{shard_start}:{shard_end}] = {len(configs)} eps)", flush=True)
 
     # --- 2. Source episodes + joints ---------------------------------------
     src_mp4, src_episodes, src_action, src_state = load_source_episodes(
-        Path(args.source_root), target_position,
+        Path(args.source_root), target_position, source_suffix=args.source_suffix,
     )
     print(f"[{out_name}] source: {src_mp4.name}  "
           f"{len(src_episodes)} episodes, {len(src_action)} frames total", flush=True)
@@ -546,7 +586,9 @@ def generate_one_dataset(args: WorkerArgs) -> dict:
     # Import here so a missing lerobot doesn't break --dry-run
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-    repo_id = f"{args.hub_org}/{out_name}" if args.push_to_hub else out_name
+    # For shard outputs, repo_id is purely a local identifier (no push) and we
+    # use the local out_name (with _shard_{i} suffix already applied).
+    repo_id = f"{args.hub_org}/{out_name}" if (args.push_to_hub and not args.is_shard) else out_name
     dataset = LeRobotDataset.create(
         repo_id=repo_id,
         fps=30,
@@ -565,8 +607,11 @@ def generate_one_dataset(args: WorkerArgs) -> dict:
     fps = 30.0
     n_source = len(src_episodes)
     for ci, cfg in enumerate(configs):
-        # Cycle source episodes 1:1 across configs.
-        src_idx = ci % n_source
+        # Cycle source episodes 1:1 across configs. Use the GLOBAL config
+        # index (shard_start + ci) so config N picks the same source episode
+        # whether it lands in shard 0's slot 666 or in the unsharded run's
+        # slot 666. For shard_count=1 this reduces to `ci % n_source`.
+        src_idx = (shard_start + ci) % n_source
         src = src_episodes[src_idx]
         # Read frames + slice joints
         frames = read_episode_frames(src_mp4, src, fps)
@@ -638,8 +683,9 @@ def generate_one_dataset(args: WorkerArgs) -> dict:
         "disk_mb": round(_dir_size_mb(out_dir), 1),
     }
 
-    # Optional HF push
-    if args.push_to_hub:
+    # Optional HF push (skipped for shards — the orchestrator pushes the
+    # merged dataset once instead).
+    if args.push_to_hub and not args.is_shard:
         upload_info = _push_to_hub(out_dir, repo_id)
         summary["hub_url"] = upload_info["hub_url"]
         summary["upload_elapsed_s"] = upload_info["elapsed_s"]
@@ -880,6 +926,7 @@ def _dry_run(
     targets: list[tuple[str, str]], n_configs: int, source_root: Path,
     celebrity_jsons: list[Path], output_suffix: str, balanced: bool = False,
     output_version: str = "v3",
+    shards_per_dataset: int = 1,
 ) -> None:
     """Print the plan without writing anything."""
     pool, n_photos = load_celebrity_pool(celebrity_jsons)
@@ -890,6 +937,16 @@ def _dry_run(
     mode_str = "balanced (Fix A: language-forcing)" if balanced else "per-slot (v3 legacy)"
     print(f"DRY RUN ({mode_str}) — {len(targets)} datasets x {effective} eps = "
           f"{len(targets) * effective} total")
+    if shards_per_dataset > 1:
+        # Show the per-shard split.
+        base = effective // shards_per_dataset
+        rem = effective % shards_per_dataset
+        slice_lens = [base + (1 if i < rem else 0) for i in range(shards_per_dataset)]
+        print(f"  sharding        : {shards_per_dataset} shards/dataset "
+              f"-> {len(targets) * shards_per_dataset} parallel work units; "
+              f"per-shard slice lengths = {slice_lens}")
+        print(f"                    after gen, lerobot aggregate_datasets() merges "
+              f"each dataset's shards into one final repo")
     print(f"  celebrity_jsons : {[str(p) for p in celebrity_jsons]}")
     print(f"  n_photos/celeb  : {n_photos}  ({', '.join(f'{s}={len(pool[s])}' for s in pool)})")
     grid_formula = f"3 * {n_photos}^3 * 2" if balanced else f"{n_photos}^3 * 2"
@@ -946,13 +1003,192 @@ def _worker_wrapper(args: WorkerArgs) -> dict:
     fn = generate_one_balanced_dataset if args.balanced else generate_one_dataset
     label = f"{args.target_celeb}_{'balanced' if args.balanced else args.target_position}"
     try:
-        return fn(args)
+        result = fn(args)
+        # Tag the result with the worker's (celeb, pos, shard_index) so
+        # _run_with_sharding can group shards back to their parent dataset
+        # without re-parsing the on-disk name. Harmless when balanced=True
+        # (shard_count defaults to 1, is_shard=False).
+        result["_target_celeb"] = args.target_celeb
+        result["_target_position"] = args.target_position
+        result["_shard_index"] = args.shard_index
+        result["_shard_count"] = args.shard_count
+        result["_is_shard"] = args.is_shard
+        return result
     except SystemExit as e:
-        return {"name": label, "error": f"SystemExit({e})", "skipped": True}
+        return {"name": label,
+                "error": f"SystemExit({e})", "skipped": True,
+                "_target_celeb": args.target_celeb,
+                "_target_position": args.target_position,
+                "_shard_index": args.shard_index,
+                "_shard_count": args.shard_count,
+                "_is_shard": args.is_shard}
     except Exception as e:
         return {"name": label,
                 "error": f"{type(e).__name__}: {e}",
-                "traceback": traceback.format_exc(), "skipped": True}
+                "traceback": traceback.format_exc(), "skipped": True,
+                "_target_celeb": args.target_celeb,
+                "_target_position": args.target_position,
+                "_shard_index": args.shard_index,
+                "_shard_count": args.shard_count,
+                "_is_shard": args.is_shard}
+
+
+def _run_with_sharding(
+    targets: list[tuple[str, str]],
+    shards_per_dataset: int,
+    n_workers: int,
+    base_worker_args_kwargs: dict,
+    push_to_hub: bool,
+    hub_org: str,
+    keep_shards: bool,
+    output_suffix: str,
+    out_root: Path,
+) -> list[dict]:
+    """Orchestrate sharded generation + per-dataset merge + push.
+
+    Builds ``shards_per_dataset * len(targets)`` WorkerArgs, runs them through
+    a single Pool.map, then for each target dataset whose shards ALL succeeded
+    invokes ``lerobot.datasets.aggregate.aggregate_datasets`` to materialize a
+    merged dataset at ``out_root / out_name``, optionally pushes to Hub once,
+    and (unless --keep-shards) removes the per-shard dirs.
+
+    Failure of any shard of dataset X skips ONLY that dataset's merge; the
+    other 8 are unaffected.
+
+    Returns a list of per-target summary dicts compatible with the SUMMARY
+    block in main().
+    """
+    # 1. Build the shard worker args list (N * 9 entries).
+    shard_args_list: list[WorkerArgs] = []
+    for c, p in targets:
+        for shard_idx in range(shards_per_dataset):
+            shard_args_list.append(WorkerArgs(
+                target_celeb=c,
+                target_position=p,
+                push_to_hub=False,           # shards never push individually
+                hub_org=hub_org,
+                output_suffix=output_suffix,
+                shard_index=shard_idx,
+                shard_count=shards_per_dataset,
+                is_shard=True,
+                **base_worker_args_kwargs,
+            ))
+
+    print(f"Generating {len(shard_args_list)} shard workers "
+          f"({shards_per_dataset} shards/dataset x {len(targets)} datasets) "
+          f"with {n_workers} parallel processes")
+    t_global = time.time()
+    if n_workers == 1:
+        shard_results = [_worker_wrapper(wa) for wa in shard_args_list]
+    else:
+        with Pool(processes=n_workers) as pool:
+            shard_results = pool.map(_worker_wrapper, shard_args_list)
+    elapsed_shards = time.time() - t_global
+    print(f"\nAll {len(shard_results)} shards finished in "
+          f"{elapsed_shards / 60:.1f} min. Starting per-dataset merges...")
+
+    # 2. Group shard results by (celeb, position).
+    by_target: dict[tuple[str, str], list[dict]] = {}
+    for r in shard_results:
+        key = (r["_target_celeb"], r["_target_position"])
+        by_target.setdefault(key, []).append(r)
+
+    # 3. Merge each target's shards (if all succeeded) into the canonical dir.
+    from lerobot.datasets.aggregate import aggregate_datasets
+
+    final_results: list[dict] = []
+    suffix = f"_{output_suffix}" if output_suffix else ""
+    for (c, p), shards in by_target.items():
+        shards = sorted(shards, key=lambda r: r["_shard_index"])
+        final_name = f"dataset_v3_synth{suffix}_{c}_{p}_2"
+        failed = [r for r in shards if r.get("error") or r.get("skipped")]
+        if failed:
+            print(f"\n[{final_name}] MERGE SKIPPED — {len(failed)}/{len(shards)} "
+                  f"shards failed:")
+            for r in failed:
+                print(f"  shard {r['_shard_index']}: "
+                      f"{r.get('error') or r.get('reason')}")
+            final_results.append({
+                "name": final_name, "skipped": True,
+                "reason": f"{len(failed)}/{len(shards)} shards failed",
+                "shard_failures": failed,
+            })
+            continue
+
+        # All shards present. Run aggregate_datasets.
+        shard_repo_ids = [s["name"] for s in shards]
+        shard_roots = [Path(s["out_dir"]) for s in shards]
+        aggr_repo_id = f"{hub_org}/{final_name}" if push_to_hub else final_name
+        aggr_root = out_root / final_name
+        # If a stale merged dir exists, blow it away — the shards are the
+        # source of truth for this run.
+        if aggr_root.exists():
+            print(f"[{final_name}] removing stale merged dir {aggr_root}")
+            shutil.rmtree(aggr_root)
+        t_merge = time.time()
+        print(f"\n[{final_name}] MERGING {len(shards)} shards into {aggr_root}")
+        try:
+            aggregate_datasets(
+                repo_ids=shard_repo_ids,
+                aggr_repo_id=aggr_repo_id,
+                roots=shard_roots,
+                aggr_root=aggr_root,
+            )
+        except Exception as e:
+            print(f"[{final_name}] MERGE FAILED: {type(e).__name__}: {e}")
+            traceback.print_exc()
+            final_results.append({
+                "name": final_name, "skipped": True,
+                "error": f"merge failed: {type(e).__name__}: {e}",
+            })
+            continue
+        merge_elapsed = time.time() - t_merge
+
+        # Accumulate per-shard counters for the SUMMARY block.
+        total_eps = sum(s["n_episodes"] for s in shards)
+        total_frames = sum(s["n_frames"] for s in shards)
+        merged_disk_mb = round(_dir_size_mb(aggr_root), 1)
+        merged_summary = {
+            "name": final_name,
+            "skipped": False,
+            "n_episodes": total_eps,
+            "n_frames": total_frames,
+            "elapsed_s": round(sum(s["elapsed_s"] for s in shards) + merge_elapsed, 1),
+            "out_dir": str(aggr_root),
+            "disk_mb": merged_disk_mb,
+            "shards": len(shards),
+            "merge_elapsed_s": round(merge_elapsed, 1),
+        }
+        print(f"[{final_name}] MERGED — {total_eps} eps, {total_frames} frames, "
+              f"{merged_disk_mb:.1f} MB ({merge_elapsed:.1f}s merge)")
+
+        # 4. Push the merged dataset (once).
+        if push_to_hub:
+            try:
+                upload_info = _push_to_hub(aggr_root, aggr_repo_id)
+                merged_summary["hub_url"] = upload_info["hub_url"]
+                merged_summary["upload_elapsed_s"] = upload_info["elapsed_s"]
+                print(f"[{final_name}] pushed -> {upload_info['hub_url']}")
+            except Exception as e:
+                # Don't kill the run; keep the merged dataset locally so the
+                # user can manually retry push.
+                print(f"[{final_name}] PUSH FAILED (merged dataset is still "
+                      f"on disk at {aggr_root}): {type(e).__name__}: {e}")
+                merged_summary["push_error"] = f"{type(e).__name__}: {e}"
+
+        # 5. Clean up shard dirs (unless --keep-shards).
+        if not keep_shards:
+            for sd in shard_roots:
+                try:
+                    if sd.exists():
+                        shutil.rmtree(sd)
+                except Exception as e:
+                    print(f"[{final_name}] warning: failed to remove shard "
+                          f"dir {sd}: {e}")
+
+        final_results.append(merged_summary)
+
+    return final_results
 
 
 def main() -> None:
@@ -995,10 +1231,25 @@ def main() -> None:
                     help="Video codec for output MP4s (default h264, matches source). "
                          "Use 'libsvtav1' for smaller files at the cost of decode speed.")
     ap.add_argument("--n-workers", type=int, default=1,
-                    help="Multiprocessing workers (one per output dataset). "
-                         "Set to 9 on Brev for full parallelism.")
+                    help="Multiprocessing workers. With --shards-per-dataset=1 "
+                         "(default) the upper limit is len(targets) (=9 for the "
+                         "full sweep) — workers above that sit idle. With "
+                         "--shards-per-dataset>1, the work unit count becomes "
+                         "shards_per_dataset * len(targets), so e.g. 27 workers "
+                         "for 3 shards x 9 datasets.")
+    ap.add_argument("--shards-per-dataset", type=int, default=1,
+                    help="If >1, split each output dataset's config grid into N "
+                         "shards, run them in parallel, then merge with "
+                         "lerobot.datasets.aggregate.aggregate_datasets and push "
+                         "the merged dataset to Hub once. Default 1 = no "
+                         "sharding (byte-identical to pre-sharding behavior).")
+    ap.add_argument("--keep-shards", action="store_true",
+                    help="With --shards-per-dataset>1, preserve the per-shard "
+                         "*_shard_{i} dirs after merge. Default is to delete "
+                         "them once the merged dataset is built (and pushed).")
     ap.add_argument("--push-to-hub", action="store_true",
-                    help="After each dataset finishes, upload to HF Hub + create v3.0 tag.")
+                    help="After each dataset finishes, upload to HF Hub + create v3.0 tag. "
+                         "With sharding, only the MERGED dataset is pushed (not each shard).")
     ap.add_argument("--hub-org", default="RobotLearningVLA",
                     help="HF org for the repo_id (default RobotLearningVLA).")
     ap.add_argument("--overwrite", action="store_true",
@@ -1034,8 +1285,10 @@ def main() -> None:
 
     if args.dry_run:
         _dry_run(targets, args.n_configs_per_dataset, args.source_root,
-                 celebrity_jsons, args.output_suffix, balanced=args.balanced,
-                 output_version=args.output_version)
+                 celebrity_jsons, args.output_suffix,
+                 balanced=args.balanced,
+                 output_version=args.output_version,
+                 shards_per_dataset=max(1, int(args.shards_per_dataset)))
         return
 
     # Validate inputs early.
@@ -1067,36 +1320,62 @@ def main() -> None:
         warmth=args.global_lift_warmth,
     )
 
-    worker_args_list = [
-        WorkerArgs(
-            target_celeb=c,
-            target_position=p,
-            n_configs=args.n_configs_per_dataset,
-            source_root=str(args.source_root),
-            out_root=str(args.out_root),
-            celebrity_jsons=[str(jp) for jp in celebrity_jsons],
-            blend_args=blend_args,
-            global_lift_args=global_lift_args,
-            vcodec=args.vcodec,
+    # Fields shared by every WorkerArgs in both the sharded and unsharded paths.
+    # The sharded path adds shard_index/shard_count/is_shard/push_to_hub overrides.
+    base_worker_kwargs = dict(
+        n_configs=args.n_configs_per_dataset,
+        source_root=str(args.source_root),
+        out_root=str(args.out_root),
+        celebrity_jsons=[str(jp) for jp in celebrity_jsons],
+        blend_args=blend_args,
+        global_lift_args=global_lift_args,
+        vcodec=args.vcodec,
+        overwrite=args.overwrite,
+    )
+
+    shards = max(1, int(args.shards_per_dataset))
+    if args.balanced and shards > 1:
+        sys.exit(
+            "--balanced and --shards-per-dataset>1 are not yet compatible "
+            "(the sharding orchestrator builds per-(celeb,position) WorkerArgs; "
+            "balanced datasets are keyed by celeb only and have a different "
+            "naming scheme). Run balanced with --shards-per-dataset=1."
+        )
+    t_global = time.time()
+    if shards == 1:
+        # Legacy path — byte-identical to pre-sharding behavior.
+        worker_args_list = [
+            WorkerArgs(
+                target_celeb=c,
+                target_position=p,
+                push_to_hub=args.push_to_hub,
+                hub_org=args.hub_org,
+                output_suffix=args.output_suffix,
+                **base_worker_kwargs,
+            )
+            for c, p in targets
+        ]
+        print(f"Generating {len(worker_args_list)} datasets "
+              f"with {args.n_workers} workers  "
+              f"(suffix={args.output_suffix!r}, n_configs={args.n_configs_per_dataset})")
+        if args.n_workers == 1:
+            results = [_worker_wrapper(wa) for wa in worker_args_list]
+        else:
+            with Pool(processes=args.n_workers) as pool:
+                results = pool.map(_worker_wrapper, worker_args_list)
+    else:
+        # Sharded + merged path.
+        results = _run_with_sharding(
+            targets=targets,
+            shards_per_dataset=shards,
+            n_workers=args.n_workers,
+            base_worker_args_kwargs=base_worker_kwargs,
             push_to_hub=args.push_to_hub,
             hub_org=args.hub_org,
-            overwrite=args.overwrite,
+            keep_shards=args.keep_shards,
             output_suffix=args.output_suffix,
-            balanced=args.balanced,
-            output_version=args.output_version,
+            out_root=args.out_root,
         )
-        for c, p in targets
-    ]
-
-    print(f"Generating {len(worker_args_list)} datasets "
-          f"with {args.n_workers} workers  "
-          f"(suffix={args.output_suffix!r}, n_configs={args.n_configs_per_dataset})")
-    t_global = time.time()
-    if args.n_workers == 1:
-        results = [_worker_wrapper(wa) for wa in worker_args_list]
-    else:
-        with Pool(processes=args.n_workers) as pool:
-            results = pool.map(_worker_wrapper, worker_args_list)
     elapsed_global = time.time() - t_global
 
     # Summary report

@@ -38,14 +38,125 @@ else to the underlying dataset via ``__getattr__``, mirroring the pattern in
 from __future__ import annotations
 
 import glob
+import hashlib
+import logging
 import os
+import pickle
 import random
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+
+
+# --- Eval3PrepDataset.__init__ cache (opt-in) -----------------------------
+#
+# Computing the per-dataset prep state (valid_indices, truncation log, action
+# overrides, recomputed action/state stats) iterates 100k+ frames from parquet
+# and takes ~80 s per dataset on a v3 synth corpus. With 9 datasets that's
+# ~12 min of stats-merge on every train launch.
+#
+# The result is fully determined by (repo_id, dataset content, aug config), so
+# we OPTIONALLY cache it to <cache_dir>/<key>.pkl. Subsequent launches with
+# the same config skip the slow path entirely (~15 s for all 9 datasets).
+#
+# **Disabled by default** — no log lines, no filesystem writes, behavior is
+# identical to the original implementation unless the user opts in.
+#
+# Env-var contract:
+#   EVAL3_PREP_CACHE       — "0" (default) disables both reads and writes.
+#                            Set to "1"/"true"/"yes"/"on" (case-insensitive)
+#                            to enable the cache.
+#   EVAL3_PREP_CACHE_DIR   — override the cache directory. Default
+#                            ~/.cache/eval3_concat_patch.
+#
+# Invalidate by removing the cache dir or bumping _PREP_CACHE_VERSION below.
+_PREP_CACHE_DEFAULT_DIR = Path.home() / ".cache" / "eval3_concat_patch"
+_PREP_CACHE_VERSION = 1
+
+
+def _prep_cache_enabled() -> bool:
+    raw = os.environ.get("EVAL3_PREP_CACHE", "0").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def _prep_cache_dir() -> Path:
+    override = os.environ.get("EVAL3_PREP_CACHE_DIR", "").strip()
+    return Path(override).expanduser() if override else _PREP_CACHE_DEFAULT_DIR
+
+
+def _prep_cache_key(
+    repo_id: str,
+    total_frames: int,
+    total_episodes: int,
+    max_frames_per_episode,
+    episode_filter,
+    truncate_at_placement: bool,
+    truncate_placement_mode: str,
+    truncate_allow_over_cap_episodes,
+    truncate_over_cap_extra_frames: int,
+    truncate_grip_threshold: float,
+    truncate_lift_threshold: float,
+    truncate_buffer_frames: int,
+    repair_gripper_open: bool,
+    gripper_open_target: float,
+    gripper_open_threshold: float,
+    action_smooth_window: int,
+    action_smooth_gripper: bool,
+) -> str:
+    over_cap = tuple(sorted(int(e) for e in truncate_allow_over_cap_episodes)) if truncate_allow_over_cap_episodes else ()
+    ep_filter_key = tuple(sorted(int(e) for e in episode_filter)) if episode_filter else None
+    payload = (
+        _PREP_CACHE_VERSION,
+        repo_id,
+        int(total_frames),
+        int(total_episodes),
+        int(max_frames_per_episode) if max_frames_per_episode is not None else None,
+        ep_filter_key,
+        bool(truncate_at_placement),
+        str(truncate_placement_mode),
+        over_cap,
+        int(truncate_over_cap_extra_frames),
+        float(truncate_grip_threshold),
+        float(truncate_lift_threshold),
+        int(truncate_buffer_frames),
+        bool(repair_gripper_open),
+        float(gripper_open_target),
+        float(gripper_open_threshold),
+        int(action_smooth_window or 0),
+        bool(action_smooth_gripper),
+    )
+    return hashlib.sha256(repr(payload).encode()).hexdigest()[:16]
+
+
+def _load_prep_cache(key: str):
+    if not _prep_cache_enabled():
+        return None
+    path = _prep_cache_dir() / f"{key}.pkl"
+    if not path.exists():
+        return None
+    try:
+        with path.open("rb") as f:
+            return pickle.load(f)
+    except Exception as e:
+        logging.warning("eval3_prep_cache: failed to load %s: %s", path, e)
+        return None
+
+
+def _save_prep_cache(key: str, state: dict) -> None:
+    if not _prep_cache_enabled():
+        return
+    cache_dir = _prep_cache_dir()
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    path = cache_dir / f"{key}.pkl"
+    try:
+        with path.open("wb") as f:
+            pickle.dump(state, f, protocol=pickle.HIGHEST_PROTOCOL)
+    except Exception as e:
+        logging.warning("eval3_prep_cache: failed to save %s: %s", path, e)
 
 
 # Substring-match list. If the recorded ``task`` string contains one of these names,
@@ -922,6 +1033,58 @@ class Eval3PrepDataset(Dataset):
             int(target_position_idx) if target_position_idx is not None else -100
         )
 
+        # Optional per-dataset prep cache (opt-in via EVAL3_PREP_CACHE=1).
+        # When the env var is unset/0, this block is a no-op and the rest of
+        # __init__ runs exactly as in the original implementation.
+        self._cache_key: str | None = None
+        if _prep_cache_enabled():
+            self._cache_key = _prep_cache_key(
+                repo_id=dataset.repo_id,
+                total_frames=int(dataset.meta.info.get("total_frames", 0)),
+                total_episodes=int(dataset.meta.info.get("total_episodes", 0)),
+                max_frames_per_episode=max_frames_per_episode,
+                episode_filter=episode_filter,
+                truncate_at_placement=truncate_at_placement,
+                truncate_placement_mode=truncate_placement_mode,
+                truncate_allow_over_cap_episodes=truncate_allow_over_cap_episodes,
+                truncate_over_cap_extra_frames=truncate_over_cap_extra_frames,
+                truncate_grip_threshold=truncate_grip_threshold,
+                truncate_lift_threshold=truncate_lift_threshold,
+                truncate_buffer_frames=truncate_buffer_frames,
+                repair_gripper_open=repair_gripper_open,
+                gripper_open_target=gripper_open_target,
+                gripper_open_threshold=gripper_open_threshold,
+                action_smooth_window=int(action_smooth_window or 0),
+                action_smooth_gripper=action_smooth_gripper,
+            )
+            cached = _load_prep_cache(self._cache_key)
+            if cached is not None:
+                logging.info(
+                    "eval3_prep_cache: HIT  %s  key=%s  (skipping ~80s slow path)",
+                    dataset.repo_id, self._cache_key,
+                )
+                self._episode_from_idxs = cached["episode_from_idxs"]
+                self._episode_to_idxs = cached["episode_to_idxs"]
+                self._episode_index_by_frame = cached["episode_index_by_frame"]
+                self._action_delta_indices = cached["action_delta_indices"]
+                self._valid_indices = cached["valid_indices"]
+                self._max_frames_per_episode = max_frames_per_episode
+                self._original_num_frames = cached["original_num_frames"]
+                self._episode_filter = cached["episode_filter"]
+                self._truncate_at_placement = cached["truncate_at_placement"]
+                self._truncate_placement_mode = cached["truncate_placement_mode"]
+                self._truncation_log = cached["truncation_log"]
+                self._kept_episode_indices = cached["kept_episode_indices"]
+                self._action_overrides = cached["action_overrides"]
+                self._action_repair_summary = cached["action_repair_summary"]
+                self._meta = deepcopy(dataset.meta)
+                self._meta.stats = cached["meta_stats"]
+                return
+            logging.info(
+                "eval3_prep_cache: MISS %s  key=%s  (computing + saving to %s)",
+                dataset.repo_id, self._cache_key, _prep_cache_dir(),
+            )
+
         # Pull episode boundaries from the underlying meta. LeRobotDatasetMetadata.episodes
         # is a pandas DataFrame with columns ``dataset_from_index`` and ``dataset_to_index``.
         ep_df = dataset.meta.episodes
@@ -1029,6 +1192,27 @@ class Eval3PrepDataset(Dataset):
             self._valid_indices,
             action_overrides=self._action_overrides,
         )
+
+        # Persist for next launch — only if cache is enabled (self._cache_key
+        # is None when EVAL3_PREP_CACHE is unset/0, so this is a no-op for the
+        # default code path).
+        if self._cache_key is not None:
+            _save_prep_cache(self._cache_key, {
+                "episode_from_idxs": self._episode_from_idxs,
+                "episode_to_idxs": self._episode_to_idxs,
+                "episode_index_by_frame": self._episode_index_by_frame,
+                "action_delta_indices": self._action_delta_indices,
+                "valid_indices": self._valid_indices,
+                "original_num_frames": self._original_num_frames,
+                "episode_filter": self._episode_filter,
+                "truncate_at_placement": self._truncate_at_placement,
+                "truncate_placement_mode": self._truncate_placement_mode,
+                "truncation_log": self._truncation_log,
+                "kept_episode_indices": self._kept_episode_indices,
+                "action_overrides": self._action_overrides,
+                "action_repair_summary": self._action_repair_summary,
+                "meta_stats": self._meta.stats,
+            })
 
     # ----- Trainer-required attributes ------------------------------------
 
