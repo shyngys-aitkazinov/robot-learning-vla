@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import statistics
 import unicodedata
 from datetime import datetime, timezone
@@ -69,6 +70,18 @@ NAME_OVERRIDES: dict[str, str] = {
     # the stage name, so canonicalise.
     "shakira isabel mebarak": "Shakira",
 }
+
+
+def to_slug(s: str) -> str:
+    """Canonical snake_case ASCII slug.
+
+    Used as a stable join key across the four datasets/*.json files. Maps
+    e.g. 'Cristiano Ronaldo' -> 'cristiano_ronaldo', 'K.J. Apa' -> 'k_j_apa',
+    'Alycia Debnam-Carey' -> 'alycia_debnam_carey'.
+    """
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
+    s = re.sub(r"[^A-Za-z0-9]+", "_", s).strip("_").lower()
+    return s
 
 
 def _to_ascii(s: str) -> str:
@@ -165,8 +178,8 @@ def main() -> None:
     total_images = 0
     total_bytes = 0
     for i, d in enumerate(pins_dirs, 1):
-        slug = d.name[len("pins_"):]
-        name = canonical_name(slug)
+        dir_basename = d.name[len("pins_"):]   # Pins source key, e.g. "Cristiano Ronaldo"
+        name = canonical_name(dir_basename)
         images = sorted(d.glob("*.jpg"))
         bytes_ = sum(p.stat().st_size for p in images)
         try:
@@ -175,7 +188,7 @@ def main() -> None:
             rel = d
         entry: dict = {
             "name": name,
-            "slug": slug,
+            "slug": to_slug(name),
             "dir": str(rel),
             "n_images": len(images),
             "total_bytes": bytes_,
@@ -185,6 +198,9 @@ def main() -> None:
             stats = image_stats(images)
             if stats is not None:
                 entry.update(stats)
+        # Trailing optional fields (null here, populated by curated subsets).
+        entry["rank"] = None
+        entry["category"] = None
         celebrities.append(entry)
         total_images += len(images)
         total_bytes += bytes_
@@ -193,12 +209,16 @@ def main() -> None:
 
     payload = {
         "dataset": "Pins Face Recognition",
+        "source": None,
         "source_url": "https://www.kaggle.com/datasets/hereisburak/pins-face-recognition",
+        "source_json": None,
         "root": str(args.root),
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "total_celebrities": len(celebrities),
         "total_images": total_images,
         "total_bytes": total_bytes,
+        "category_counts": None,
+        "selection_rationale": None,
         "held_out_identities_target": sorted(TOY_HOLDOUT),
         "held_out_identities_present": sorted(
             c["name"] for c in celebrities if c["held_out"]
@@ -227,7 +247,8 @@ def main() -> None:
     print(f"  TOY holdout targets       : {sorted(TOY_HOLDOUT)}")
     print(f"  TOY holdout present in set: {payload['held_out_identities_present']}")
     n_overrides_used = sum(
-        1 for c in celebrities if c["slug"].lower() in NAME_OVERRIDES
+        1 for c in celebrities
+        if Path(c["dir"]).name[len("pins_"):].lower() in NAME_OVERRIDES
     )
     if n_overrides_used:
         print(f"  name overrides applied    : {n_overrides_used}")

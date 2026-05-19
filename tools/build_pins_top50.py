@@ -141,8 +141,10 @@ def main() -> None:
 
     payload = {
         "dataset": "Pins Face Recognition — Top 50 (curated subset)",
-        "source_json": str(args.src),
+        "source": None,
         "source_url": src.get("source_url"),
+        "source_json": str(args.src),
+        "root": src.get("root"),
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "total_celebrities": len(top_celebs),
         "total_images": sum(c["n_images"] for c in top_celebs),
@@ -156,6 +158,9 @@ def main() -> None:
             "(GoT principals, MCU secondaries, current music acts, veteran "
             "A-listers). Excludes TOY identities scored in runs 1-6."
         ),
+        "held_out_identities_target": src.get("held_out_identities_target"),
+        "held_out_identities_present": src.get("held_out_identities_present"),
+        "name_overrides_applied": src.get("name_overrides_applied"),
         "celebrities": top_celebs,
     }
 

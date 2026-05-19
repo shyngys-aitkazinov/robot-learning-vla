@@ -1,8 +1,10 @@
 {
   "dataset": "Pins Face Recognition — Top 50 (curated subset)",
-  "source_json": "datasets/pins-face-recognition.json",
+  "source": null,
   "source_url": "https://www.kaggle.com/datasets/hereisburak/pins-face-recognition",
-  "generated_at": "2026-05-18T15:07:12+00:00",
+  "source_json": "datasets/pins-face-recognition.json",
+  "root": "datasets/pins-face-recognition/105_classes_pins_dataset",
+  "generated_at": "2026-05-18T21:50:00+00:00",
   "total_celebrities": 50,
   "total_images": 8406,
   "total_bytes": 195882576,
@@ -14,10 +16,27 @@
     "tv": 1
   },
   "selection_rationale": "Ranked by global pop-culture recognizability, optimised for the Eval 3 OOD use case: celebrities the SmolVLM backbone is most likely to recognise zero-shot. Ranks 1-30 match build_pins_top30.py exactly; ranks 31-50 add broadly-recognisable supporting names (GoT principals, MCU secondaries, current music acts, veteran A-listers). Excludes TOY identities scored in runs 1-6.",
+  "held_out_identities_target": [
+    "Barack Obama",
+    "Taylor Swift",
+    "Yann LeCun"
+  ],
+  "held_out_identities_present": [
+    "Barack Obama",
+    "Taylor Swift"
+  ],
+  "name_overrides_applied": {
+    "kiernen shipka": "Kiernan Shipka",
+    "alycia dabnem carey": "Alycia Debnam-Carey",
+    "henry cavil": "Henry Cavill",
+    "jake mcdorman": "Jake McDorman",
+    "katharine mcphee": "Katharine McPhee",
+    "shakira isabel mebarak": "Shakira"
+  },
   "celebrities": [
     {
       "name": "Cristiano Ronaldo",
-      "slug": "Cristiano Ronaldo",
+      "slug": "cristiano_ronaldo",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Cristiano Ronaldo",
       "n_images": 98,
       "total_bytes": 2061828,
@@ -38,7 +57,7 @@
     },
     {
       "name": "Lionel Messi",
-      "slug": "Lionel Messi",
+      "slug": "lionel_messi",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Lionel Messi",
       "n_images": 86,
       "total_bytes": 1690311,
@@ -59,7 +78,7 @@
     },
     {
       "name": "Rihanna",
-      "slug": "Rihanna",
+      "slug": "rihanna",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Rihanna",
       "n_images": 133,
       "total_bytes": 3767374,
@@ -80,7 +99,7 @@
     },
     {
       "name": "Elon Musk",
-      "slug": "elon musk",
+      "slug": "elon_musk",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_elon musk",
       "n_images": 135,
       "total_bytes": 2547289,
@@ -101,7 +120,7 @@
     },
     {
       "name": "Leonardo DiCaprio",
-      "slug": "Leonardo DiCaprio",
+      "slug": "leonardo_dicaprio",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Leonardo DiCaprio",
       "n_images": 237,
       "total_bytes": 4828690,
@@ -122,7 +141,7 @@
     },
     {
       "name": "Tom Cruise",
-      "slug": "Tom Cruise",
+      "slug": "tom_cruise",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Tom Cruise",
       "n_images": 192,
       "total_bytes": 4563057,
@@ -143,7 +162,7 @@
     },
     {
       "name": "Dwayne Johnson",
-      "slug": "Dwayne Johnson",
+      "slug": "dwayne_johnson",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Dwayne Johnson",
       "n_images": 141,
       "total_bytes": 2944933,
@@ -164,7 +183,7 @@
     },
     {
       "name": "Robert Downey Jr",
-      "slug": "Robert Downey Jr",
+      "slug": "robert_downey_jr",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Robert Downey Jr",
       "n_images": 233,
       "total_bytes": 5613146,
@@ -185,7 +204,7 @@
     },
     {
       "name": "Scarlett Johansson",
-      "slug": "scarlett johansson",
+      "slug": "scarlett_johansson",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_scarlett johansson",
       "n_images": 201,
       "total_bytes": 6200746,
@@ -206,7 +225,7 @@
     },
     {
       "name": "Jennifer Lawrence",
-      "slug": "Jennifer Lawrence",
+      "slug": "jennifer_lawrence",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Jennifer Lawrence",
       "n_images": 180,
       "total_bytes": 4737454,
@@ -227,7 +246,7 @@
     },
     {
       "name": "Margot Robbie",
-      "slug": "margot robbie",
+      "slug": "margot_robbie",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_margot robbie",
       "n_images": 221,
       "total_bytes": 6474987,
@@ -248,7 +267,7 @@
     },
     {
       "name": "Zendaya",
-      "slug": "Zendaya",
+      "slug": "zendaya",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Zendaya",
       "n_images": 138,
       "total_bytes": 2934763,
@@ -269,7 +288,7 @@
     },
     {
       "name": "Emma Watson",
-      "slug": "Emma Watson",
+      "slug": "emma_watson",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Emma Watson",
       "n_images": 211,
       "total_bytes": 5057392,
@@ -290,7 +309,7 @@
     },
     {
       "name": "Tom Holland",
-      "slug": "Tom Holland",
+      "slug": "tom_holland",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Tom Holland",
       "n_images": 189,
       "total_bytes": 3133669,
@@ -311,7 +330,7 @@
     },
     {
       "name": "Keanu Reeves",
-      "slug": "Keanu Reeves",
+      "slug": "keanu_reeves",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Keanu Reeves",
       "n_images": 160,
       "total_bytes": 3651232,
@@ -332,7 +351,7 @@
     },
     {
       "name": "Bill Gates",
-      "slug": "Bill Gates",
+      "slug": "bill_gates",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Bill Gates",
       "n_images": 122,
       "total_bytes": 2372824,
@@ -353,7 +372,7 @@
     },
     {
       "name": "Mark Zuckerberg",
-      "slug": "Mark Zuckerberg",
+      "slug": "mark_zuckerberg",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Mark Zuckerberg",
       "n_images": 95,
       "total_bytes": 1290137,
@@ -374,7 +393,7 @@
     },
     {
       "name": "Jeff Bezos",
-      "slug": "jeff bezos",
+      "slug": "jeff_bezos",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_jeff bezos",
       "n_images": 106,
       "total_bytes": 1477235,
@@ -395,7 +414,7 @@
     },
     {
       "name": "Chris Evans",
-      "slug": "Chris Evans",
+      "slug": "chris_evans",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Chris Evans",
       "n_images": 166,
       "total_bytes": 2981074,
@@ -416,7 +435,7 @@
     },
     {
       "name": "Chris Hemsworth",
-      "slug": "Chris Hemsworth",
+      "slug": "chris_hemsworth",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Chris Hemsworth",
       "n_images": 159,
       "total_bytes": 4296937,
@@ -437,7 +456,7 @@
     },
     {
       "name": "Hugh Jackman",
-      "slug": "Hugh Jackman",
+      "slug": "hugh_jackman",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Hugh Jackman",
       "n_images": 179,
       "total_bytes": 4234642,
@@ -458,7 +477,7 @@
     },
     {
       "name": "Morgan Freeman",
-      "slug": "Morgan Freeman",
+      "slug": "morgan_freeman",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Morgan Freeman",
       "n_images": 105,
       "total_bytes": 3838725,
@@ -479,7 +498,7 @@
     },
     {
       "name": "Johnny Depp",
-      "slug": "Johnny Depp",
+      "slug": "johnny_depp",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Johnny Depp",
       "n_images": 182,
       "total_bytes": 3593490,
@@ -500,7 +519,7 @@
     },
     {
       "name": "Christian Bale",
-      "slug": "Christian Bale",
+      "slug": "christian_bale",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Christian Bale",
       "n_images": 154,
       "total_bytes": 4183335,
@@ -521,7 +540,7 @@
     },
     {
       "name": "Anne Hathaway",
-      "slug": "Anne Hathaway",
+      "slug": "anne_hathaway",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Anne Hathaway",
       "n_images": 203,
       "total_bytes": 5104628,
@@ -542,7 +561,7 @@
     },
     {
       "name": "Emma Stone",
-      "slug": "Emma Stone",
+      "slug": "emma_stone",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Emma Stone",
       "n_images": 139,
       "total_bytes": 3678846,
@@ -563,7 +582,7 @@
     },
     {
       "name": "Selena Gomez",
-      "slug": "Selena Gomez",
+      "slug": "selena_gomez",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Selena Gomez",
       "n_images": 186,
       "total_bytes": 3743848,
@@ -584,7 +603,7 @@
     },
     {
       "name": "Millie Bobby Brown",
-      "slug": "Millie Bobby Brown",
+      "slug": "millie_bobby_brown",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Millie Bobby Brown",
       "n_images": 191,
       "total_bytes": 4217348,
@@ -605,7 +624,7 @@
     },
     {
       "name": "Jason Momoa",
-      "slug": "Jason Momoa",
+      "slug": "jason_momoa",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Jason Momoa",
       "n_images": 184,
       "total_bytes": 4837154,
@@ -626,7 +645,7 @@
     },
     {
       "name": "Mark Ruffalo",
-      "slug": "Mark Ruffalo",
+      "slug": "mark_ruffalo",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Mark Ruffalo",
       "n_images": 178,
       "total_bytes": 3281611,
@@ -647,7 +666,7 @@
     },
     {
       "name": "Natalie Portman",
-      "slug": "Natalie Portman",
+      "slug": "natalie_portman",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Natalie Portman",
       "n_images": 166,
       "total_bytes": 5193425,
@@ -668,7 +687,7 @@
     },
     {
       "name": "Tom Hardy",
-      "slug": "Tom Hardy",
+      "slug": "tom_hardy",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Tom Hardy",
       "n_images": 198,
       "total_bytes": 4935368,
@@ -689,7 +708,7 @@
     },
     {
       "name": "Gal Gadot",
-      "slug": "gal gadot",
+      "slug": "gal_gadot",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_gal gadot",
       "n_images": 199,
       "total_bytes": 5062046,
@@ -710,7 +729,7 @@
     },
     {
       "name": "Brie Larson",
-      "slug": "Brie Larson",
+      "slug": "brie_larson",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Brie Larson",
       "n_images": 169,
       "total_bytes": 3514272,
@@ -731,7 +750,7 @@
     },
     {
       "name": "Henry Cavill",
-      "slug": "Henry Cavil",
+      "slug": "henry_cavill",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Henry Cavil",
       "n_images": 195,
       "total_bytes": 6065581,
@@ -752,7 +771,7 @@
     },
     {
       "name": "Emilia Clarke",
-      "slug": "Emilia Clarke",
+      "slug": "emilia_clarke",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Emilia Clarke",
       "n_images": 210,
       "total_bytes": 5750368,
@@ -773,7 +792,7 @@
     },
     {
       "name": "Sophie Turner",
-      "slug": "Sophie Turner",
+      "slug": "sophie_turner",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Sophie Turner",
       "n_images": 204,
       "total_bytes": 5203781,
@@ -794,7 +813,7 @@
     },
     {
       "name": "Rami Malek",
-      "slug": "Rami Malek",
+      "slug": "rami_malek",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Rami Malek",
       "n_images": 160,
       "total_bytes": 2572865,
@@ -815,7 +834,7 @@
     },
     {
       "name": "Ben Affleck",
-      "slug": "Ben Affleck",
+      "slug": "ben_affleck",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Ben Affleck",
       "n_images": 126,
       "total_bytes": 2708062,
@@ -836,7 +855,7 @@
     },
     {
       "name": "Tom Hiddleston",
-      "slug": "Tom Hiddleston",
+      "slug": "tom_hiddleston",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Tom Hiddleston",
       "n_images": 181,
       "total_bytes": 3940251,
@@ -857,7 +876,7 @@
     },
     {
       "name": "Elizabeth Olsen",
-      "slug": "elizabeth olsen",
+      "slug": "elizabeth_olsen",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_elizabeth olsen",
       "n_images": 221,
       "total_bytes": 6171344,
@@ -878,7 +897,7 @@
     },
     {
       "name": "Miley Cyrus",
-      "slug": "Miley Cyrus",
+      "slug": "miley_cyrus",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Miley Cyrus",
       "n_images": 178,
       "total_bytes": 3706940,
@@ -899,7 +918,7 @@
     },
     {
       "name": "Avril Lavigne",
-      "slug": "Avril Lavigne",
+      "slug": "avril_lavigne",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Avril Lavigne",
       "n_images": 162,
       "total_bytes": 3407315,
@@ -920,7 +939,7 @@
     },
     {
       "name": "Megan Fox",
-      "slug": "Megan Fox",
+      "slug": "megan_fox",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Megan Fox",
       "n_images": 209,
       "total_bytes": 5447240,
@@ -941,7 +960,7 @@
     },
     {
       "name": "Penn Badgley",
-      "slug": "Penn Badgley",
+      "slug": "penn_badgley",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Penn Badgley",
       "n_images": 171,
       "total_bytes": 2933595,
@@ -962,7 +981,7 @@
     },
     {
       "name": "Jeremy Renner",
-      "slug": "Jeremy Renner",
+      "slug": "jeremy_renner",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Jeremy Renner",
       "n_images": 167,
       "total_bytes": 3270252,
@@ -983,7 +1002,7 @@
     },
     {
       "name": "Jimmy Fallon",
-      "slug": "Jimmy Fallon",
+      "slug": "jimmy_fallon",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Jimmy Fallon",
       "n_images": 113,
       "total_bytes": 1838955,
@@ -1004,7 +1023,7 @@
     },
     {
       "name": "Anthony Mackie",
-      "slug": "Anthony Mackie",
+      "slug": "anthony_mackie",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Anthony Mackie",
       "n_images": 124,
       "total_bytes": 1660033,
@@ -1025,7 +1044,7 @@
     },
     {
       "name": "Robert De Niro",
-      "slug": "Robert De Niro",
+      "slug": "robert_de_niro",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Robert De Niro",
       "n_images": 156,
       "total_bytes": 4529494,
@@ -1046,7 +1065,7 @@
     },
     {
       "name": "Maisie Williams",
-      "slug": "Maisie Williams",
+      "slug": "maisie_williams",
       "dir": "datasets/pins-face-recognition/105_classes_pins_dataset/pins_Maisie Williams",
       "n_images": 193,
       "total_bytes": 4632684,

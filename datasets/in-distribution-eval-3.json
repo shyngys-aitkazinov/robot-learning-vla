@@ -1,11 +1,15 @@
 {
   "dataset": "Eval 3 In-Distribution (TOY) celebrity images",
   "source": "in-distribution-eval-3.pdf (course-provided), rendered at 300 DPI and auto-rotated to portrait via face detection",
+  "source_url": null,
+  "source_json": null,
   "root": "datasets/in-distribution-eval-3",
   "generated_at": "2026-05-18T21:17:06+00:00",
   "total_celebrities": 3,
   "total_images": 15,
   "total_bytes": 7003469,
+  "category_counts": null,
+  "selection_rationale": null,
   "held_out_identities_target": [
     "Barack Obama",
     "Taylor Swift",
@@ -35,7 +39,9 @@
         "min": 2182,
         "median": 2194,
         "max": 2204
-      }
+      },
+      "rank": null,
+      "category": null
     },
     {
       "name": "Barack Obama",
@@ -54,7 +60,9 @@
         "min": 2114,
         "median": 2144,
         "max": 2157
-      }
+      },
+      "rank": null,
+      "category": null
     },
     {
       "name": "Yann LeCun",
@@ -73,7 +81,9 @@
         "min": 2032,
         "median": 2063,
         "max": 2101
-      }
+      },
+      "rank": null,
+      "category": null
     }
   ]
 }
