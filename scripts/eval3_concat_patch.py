@@ -261,6 +261,7 @@ def apply_concat_patch() -> None:
                 PrintShuffleAugmenter,
                 make_task_augmenter,
                 make_slot_task_augmenter,
+                make_state_augmenter,
             )
         except ImportError as e:
             logging.warning("eval3_concat_patch: could not import eval3_dataset_prep (%s); "
@@ -275,6 +276,49 @@ def apply_concat_patch() -> None:
                 max_frames = None  # disabled
 
             task_aug = make_task_augmenter() if os.environ.get("EVAL3_TASK_AUG", "1") == "1" else None
+            # Build the state augmenter once (env-var driven). All Eval3PrepDataset
+            # instances share the SAME augmenter so the mp.Value curriculum step is
+            # consistent across datasets. Returns None if no aug is enabled.
+            #
+            # Pull per-joint state std from the PRIMARY dataset's stats — this
+            # is what the lerobot normalizer will apply at preprocessor time, so
+            # using these stats here means sigma in normalized units is exactly
+            # right. (All synth datasets share approximately the same state
+            # distribution since they reuse the same source trajectories — std
+            # varies by <5% across the 9 synth repos.)
+            try:
+                primary_ds = datasets[0]
+                state_std_raw = primary_ds.meta.stats.get("observation.state", {}).get("std")
+                if state_std_raw is not None:
+                    # Stats may be tensor, list, or numpy array — coerce to tuple of floats.
+                    import numpy as _np
+                    if hasattr(state_std_raw, "tolist"):
+                        state_std = tuple(float(x) for x in state_std_raw.tolist())
+                    else:
+                        state_std = tuple(float(x) for x in state_std_raw)
+                else:
+                    state_std = None
+            except Exception as exc:
+                logging.warning(
+                    "eval3_concat_patch: could not extract state std for normalized "
+                    "noise calibration (%s); sigma will be interpreted as raw degrees",
+                    exc,
+                )
+                state_std = None
+            state_aug = make_state_augmenter(state_std=state_std)
+            if state_aug is not None:
+                logging.info(
+                    "eval3_concat_patch: state augmentation enabled — "
+                    "sigma_max=%s sigma_min=%s curriculum_steps=%s replace_prob=%s "
+                    "mode_home_w=%s mode_zero_w=%s state_std=%s",
+                    os.environ.get("EVAL3_STATE_NOISE_SIGMA_MAX", "0.0"),
+                    os.environ.get("EVAL3_STATE_NOISE_SIGMA_MIN", "0.0"),
+                    os.environ.get("EVAL3_STATE_NOISE_CURRICULUM_STEPS", "0"),
+                    os.environ.get("EVAL3_STATE_REPLACE_PROB", "0.0"),
+                    state_aug._mode_home_weight,
+                    state_aug._mode_zero_weight,
+                    "<provided>" if state_std is not None else "<raw-degrees fallback>",
+                )
             bg_replace_enabled = os.environ.get("EVAL3_BG_REPLACE", "1") == "1"
             print_shuffle_enabled = os.environ.get("EVAL3_PRINT_SHUFFLE", "1") == "1"
             try:
@@ -456,12 +500,21 @@ def apply_concat_patch() -> None:
                 repair_this_gripper = bool(
                     gripper_repair_enabled and (new_data or not gripper_repair_new_only)
                 )
+                # Derive the auxiliary-head position label from the repo name.
+                # `_slot_from_repo` works on any repo (v2 OR synth v3) — it
+                # substring-matches `_left_` / `_middle_` / `_right_` or trailing
+                # ones. Datasets without a slot in the name (e.g. old
+                # single-celeb `taylor_swift_1`) get None → -100 ignore_index.
+                _aux_pos_idx = (
+                    {"left": 0, "middle": 1, "right": 2}.get(_slot_from_repo(d.repo_id))
+                )
                 w = Eval3PrepDataset(
                     d,
                     max_frames_per_episode=max_frames,
                     task_aug_fn=ds_task_aug,
                     bg_aug_fn=bg_aug,
                     print_aug_fn=print_aug,
+                    state_aug_fn=state_aug,
                     episode_filter=ep_filter,
                     truncate_at_placement=trunc_at_place,
                     truncate_placement_mode=trunc_mode,
@@ -475,6 +528,7 @@ def apply_concat_patch() -> None:
                     gripper_open_threshold=gripper_open_threshold,
                     action_smooth_window=action_smooth_window,
                     action_smooth_gripper=action_smooth_gripper,
+                    target_position_idx=_aux_pos_idx,
                 )
                 s = w.truncation_summary()
                 logging.info(

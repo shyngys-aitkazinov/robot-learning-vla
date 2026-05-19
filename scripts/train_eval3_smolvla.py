@@ -37,6 +37,13 @@ from eval3_concat_patch import apply_concat_patch as _eval3_concat_apply  # noqa
 
 _eval3_concat_apply()
 
+# Optional auxiliary position-classification head (forces SmolVLA's
+# hidden state to encode language-image binding). No-op unless
+# EVAL3_AUX_POS_LOSS_WEIGHT > 0.
+from eval3_smolvla_aux_head import apply as _eval3_aux_head_apply  # noqa: E402
+
+_eval3_aux_head_apply()
+
 from lerobot.scripts.lerobot_train import main  # noqa: E402
 
 

@@ -42,6 +42,14 @@ from eval3_lerobot_shim import apply as _eval3_shim_apply
 
 _eval3_shim_apply()
 
+# Apply the aux-head patch so checkpoints trained with EVAL3_AUX_POS_LOSS_WEIGHT
+# > 0 load cleanly (their state_dict carries `position_clf_head.*` keys). Setting
+# loss_weight unset / 0 makes it a runtime no-op — the head exists but never
+# contributes a gradient, and sample_actions doesn't touch it at all.
+from eval3_smolvla_aux_head import apply as _eval3_aux_head_apply  # noqa: E402
+
+_eval3_aux_head_apply()
+
 import torch  # noqa: E402
 from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig  # noqa: F401, E402
 from lerobot.configs import parser  # noqa: E402

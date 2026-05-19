@@ -54,6 +54,346 @@ from torch.utils.data import Dataset
 KNOWN_CELEBRITIES = ("Taylor Swift", "Yann LeCun", "Barack Obama")
 SLOT_NAMES = ("left", "middle", "right")
 
+# Canonical HOME pose averaged across the first 5 frames of every episode in
+# dataset_v3_charuco_{left,middle,right}_2 (30 episodes × 5 frames = 150 samples).
+# Values are in degrees. Joint order: shoulder_pan, shoulder_lift, elbow_flex,
+# wrist_flex, wrist_roll, gripper. See `tools/eval3_compute_canonical_home.py`
+# for the derivation (script committed alongside this constant).
+#
+# Why a GLOBAL average and not per-position: the per-position wrist_roll-at-HOME
+# carries directional info (left: +9.3°, middle: +0.2°, right: +12.3°) that the
+# model could exploit to predict trajectory direction from state alone. The
+# global average erases that cue so HOME-masked frames look truly identical
+# (modulo jitter) regardless of the eventual target.
+CANONICAL_HOME_STATE = (1.3574, -102.8120, 96.3487, -99.8464, 7.2586, 0.6771)
+
+
+class _CurriculumStepCounter:
+    """Shared training-step counter for noise curriculum.
+
+    Workers spawned by DataLoader read the counter via the shared
+    multiprocessing.Value created at module import time. The train loop is
+    expected to call ``set_step(n)`` once per step (see the patch wiring in
+    ``eval3_smolvla_aux_head.apply()``).
+    """
+
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            import multiprocessing
+
+            cls._instance = super().__new__(cls)
+            # 'i' = signed int; initial value 0; lock=True for safe writes
+            cls._instance._step = multiprocessing.Value("i", 0)
+        return cls._instance
+
+    def set_step(self, step: int) -> None:
+        self._step.value = int(step)
+
+    def get_step(self) -> int:
+        return int(self._step.value)
+
+
+# Module-level singleton — instantiated lazily at first import so the
+# multiprocessing.Value is created BEFORE any DataLoader workers fork from it.
+def get_curriculum_step_counter() -> "_CurriculumStepCounter":
+    return _CurriculumStepCounter()
+
+
+class StateAugmenter:
+    """Picklable state-augmentation callable for breaking the state shortcut.
+
+    Three orthogonal pressures, each opt-in via env vars / kwargs:
+
+    1. **Gaussian noise** with optional cosine-decay curriculum on ``sigma``.
+       At training progress ``p`` (= step / curriculum_steps clamped to [0, 1]),
+       sigma transitions from ``sigma_max`` (high) to ``sigma_min`` (low):
+
+           sigma(p) = sigma_min + 0.5 * (sigma_max - sigma_min) * (1 + cos(pi * p))
+
+       So at p=0: sigma = sigma_max. At p=1: sigma = sigma_min. Encourages the
+       policy to lean on visual + language features early when state is
+       unreliable, while still letting it learn from clean state late.
+
+       **Sigma is in NORMALIZED STDDEV UNITS, not raw degrees.** That is,
+       sigma=0.3 means "perturb each joint by 0.3 of its per-joint training
+       stddev". This gives uniform perturbation magnitude across joints in
+       the space the model actually sees (after the lerobot normalizer's
+       (x - mean) / std step). With per-joint raw-degree noise, joints with
+       small stddev (shoulder_pan) get 3.7× more noise than joints with
+       large stddev (shoulder_lift) — not what we want.
+
+       If ``state_std`` is not passed (e.g., constructed before stats are
+       available), sigma is interpreted as raw degrees as a fallback — but
+       the augmenter logs a warning since this gives uneven per-joint effect.
+
+    2. **State replacement** with probability ``replace_prob`` per frame. Of
+       the replaced frames, ``mode_weights`` decides between two modes:
+       - ``home``: replace with ``CANONICAL_HOME_STATE`` + jitter (raw degrees)
+       - ``zero``: replace with all zeros (raw degrees)
+       The HOME mode breaks the shortcut by making the same start-state map
+       to multiple actions (only language distinguishes). The zero mode is
+       more aggressive — forces image + language to predict from no state.
+       Note: after the lerobot normalizer, HOME normalizes to ~3.91 stddev
+       away from training mean (trajectory-centered stats put HOME in the
+       OOD tail — this is intended behavior because HOME IS the deploy
+       starting condition).
+
+       The HOME-jitter (1° default) and replacement are applied in RAW
+       degree space. The Gaussian noise (which IS in normalized units) is
+       applied AFTER replacement, in raw-degree space scaled per-joint by
+       std.
+
+    3. **Gripper protection**: noise on the gripper is reduced by
+       ``gripper_noise_scale`` (default 0.1) because gripper is near-binary
+       and large noise destroys grasp/release labels.
+
+    The augmenter operates on a 6-dim float tensor (the ``observation.state``
+    AFTER it's been pulled from ``row["observation.state"]``). It returns a
+    new tensor with the same shape and dtype.
+    """
+
+    def __init__(
+        self,
+        sigma_max: float = 0.0,
+        sigma_min: float = 0.0,
+        curriculum_steps: int = 0,
+        replace_prob: float = 0.0,
+        mode_home_weight: float = 0.7,
+        mode_zero_weight: float = 0.3,
+        home_jitter_sigma: float = 1.0,
+        gripper_noise_scale: float = 0.1,
+        state_std: tuple | list | None = None,
+        seed: int = 1337,
+    ):
+        self._sigma_max = float(sigma_max)
+        self._sigma_min = float(sigma_min)
+        self._curriculum_steps = int(curriculum_steps)
+        self._replace_prob = float(replace_prob)
+        self._mode_home_weight = float(mode_home_weight)
+        self._mode_zero_weight = float(mode_zero_weight)
+        self._home_jitter_sigma = float(home_jitter_sigma)
+        self._gripper_noise_scale = float(gripper_noise_scale)
+        # state_std (6,) — per-joint training-set stddev. sigma is interpreted
+        # in normalized stddev units; raw-degree noise = sigma * state_std.
+        # None → fallback to raw-degree interpretation (uneven per joint).
+        self._state_std: tuple | None = tuple(state_std) if state_std is not None else None
+        self._seed = int(seed)
+        self._rng = random.Random(seed)
+        # mp.Value singleton (created at module import, shared across workers).
+        self._step_counter = get_curriculum_step_counter()
+        # Pre-compute the HOME / state_std tensors once (lazy — don't know device yet).
+        self._home_tensor: torch.Tensor | None = None
+        self._std_tensor: torch.Tensor | None = None
+        if self._state_std is None and self._sigma_max > 0.0:
+            import logging
+            logging.warning(
+                "[StateAugmenter] state_std not provided; sigma=%.3f will be "
+                "interpreted as RAW DEGREES, giving uneven per-joint noise after "
+                "normalization (shoulder_pan std≈14° gets 3.7× more effective "
+                "perturbation than shoulder_lift std≈50°). Pass state_std=dataset.meta.stats[\"observation.state\"][\"std\"] for uniform perturbation.",
+                self._sigma_max,
+            )
+
+    def _current_sigma(self) -> float:
+        """Cosine-decay sigma. Constant sigma_max if curriculum is disabled."""
+        if self._curriculum_steps <= 0:
+            return self._sigma_max
+        step = self._step_counter.get_step()
+        # Clamp progress to [0, 1].
+        progress = max(0.0, min(1.0, step / self._curriculum_steps))
+        import math
+        return self._sigma_min + 0.5 * (self._sigma_max - self._sigma_min) * (
+            1.0 + math.cos(math.pi * progress)
+        )
+
+    def _get_home(self, ref: torch.Tensor) -> torch.Tensor:
+        """Return the HOME tensor on the same device/dtype as ``ref``."""
+        if self._home_tensor is None or self._home_tensor.device != ref.device or self._home_tensor.dtype != ref.dtype:
+            self._home_tensor = torch.tensor(
+                CANONICAL_HOME_STATE, dtype=ref.dtype, device=ref.device
+            )
+        return self._home_tensor
+
+    def _get_std(self, ref: torch.Tensor) -> torch.Tensor | None:
+        """Return per-joint stddev tensor on ref's device/dtype, or None for raw mode."""
+        if self._state_std is None:
+            return None
+        if self._std_tensor is None or self._std_tensor.device != ref.device or self._std_tensor.dtype != ref.dtype:
+            self._std_tensor = torch.tensor(
+                self._state_std, dtype=ref.dtype, device=ref.device
+            )
+        return self._std_tensor
+
+    def __call__(self, state: torch.Tensor) -> torch.Tensor:
+        """Augment a single-sample state vector (shape: (6,) — float tensor)."""
+        # First decide on replacement (B + D unified). The two modes are
+        # mutually exclusive per call; weights pick which one runs (if any).
+        if self._replace_prob > 0.0 and self._rng.random() < self._replace_prob:
+            total = self._mode_home_weight + self._mode_zero_weight
+            if total <= 0:
+                mode_roll = -1.0  # both weights zero → skip replacement
+            else:
+                mode_roll = self._rng.random() * total
+            if mode_roll < self._mode_home_weight:
+                # HOME mode: canonical home + jitter (raw degrees).
+                home = self._get_home(state)
+                jitter = torch.randn_like(state) * self._home_jitter_sigma
+                jitter[-1] = jitter[-1] * self._gripper_noise_scale
+                state = home + jitter
+            elif mode_roll < total:
+                # Zero mode (raw degrees).
+                state = torch.zeros_like(state)
+
+        # Gaussian noise (A) with cosine-decay sigma. sigma is in NORMALIZED
+        # stddev units, so raw-degree noise per joint = sigma * state_std[j].
+        # This gives uniform perturbation across joints in the space the
+        # model sees (after lerobot normalizer's (x - mean) / std).
+        sigma = self._current_sigma()
+        if sigma > 0.0:
+            std_t = self._get_std(state)
+            if std_t is not None:
+                # Normalized-units mode: scale per-joint by std.
+                noise = torch.randn_like(state) * sigma * std_t
+            else:
+                # Fallback: raw degrees (warned at __init__).
+                noise = torch.randn_like(state) * sigma
+            noise[-1] = noise[-1] * self._gripper_noise_scale
+            state = state + noise
+
+        return state
+
+    def __reduce__(self):
+        # Reconstructable in worker processes (DataLoader forks). state_std is
+        # included so forked workers reconstruct an augmenter with the same
+        # per-joint scaling.
+        return (
+            self.__class__,
+            (
+                self._sigma_max,
+                self._sigma_min,
+                self._curriculum_steps,
+                self._replace_prob,
+                self._mode_home_weight,
+                self._mode_zero_weight,
+                self._home_jitter_sigma,
+                self._gripper_noise_scale,
+                self._state_std,
+                self._seed,
+            ),
+        )
+
+
+def make_state_augmenter(state_std: tuple | list | None = None) -> "StateAugmenter | None":
+    """Build a StateAugmenter from env vars. Returns None if no augmentation is enabled.
+
+    Parameters
+    ----------
+    state_std : tuple | list | None
+        Per-joint training-set stddev (6,) for ``observation.state``. Pulled from
+        ``dataset.meta.stats["observation.state"]["std"]`` by the caller. If passed,
+        ``EVAL3_STATE_NOISE_SIGMA_MAX`` and ``_MIN`` are interpreted as NORMALIZED
+        STDDEV UNITS (raw-degree noise per joint = sigma * state_std[j]).
+        If None, sigma is interpreted as raw degrees with a warning.
+    """
+    def _ef(name: str, default: float) -> float:
+        raw = os.environ.get(name, "").strip()
+        if not raw:
+            return default
+        try:
+            return float(raw)
+        except ValueError:
+            return default
+
+    def _ei(name: str, default: int) -> int:
+        raw = os.environ.get(name, "").strip()
+        if not raw:
+            return default
+        try:
+            return int(raw)
+        except ValueError:
+            return default
+
+    # Default sigma_max = 0.3 (= 30% of one normalized stddev per joint) when
+    # state_std is available — pre-tuned for the v6_synth corpus. Raw-degree
+    # equivalent at a typical std=30° would be 9° of effective noise.
+    sigma_max = _ef("EVAL3_STATE_NOISE_SIGMA_MAX", 0.0)
+    sigma_min = _ef("EVAL3_STATE_NOISE_SIGMA_MIN", 0.0)
+    curriculum_steps = _ei("EVAL3_STATE_NOISE_CURRICULUM_STEPS", 0)
+    replace_prob = _ef("EVAL3_STATE_REPLACE_PROB", 0.0)
+    home_jitter_sigma = _ef("EVAL3_STATE_HOME_JITTER_SIGMA", 1.0)
+    gripper_noise_scale = _ef("EVAL3_STATE_GRIPPER_NOISE_SCALE", 0.1)
+
+    # Parse mode weights from EVAL3_STATE_REPLACE_MODES="home:0.7,zero:0.3"
+    modes_str = os.environ.get("EVAL3_STATE_REPLACE_MODES", "home:0.7,zero:0.3").strip()
+    home_w, zero_w = 0.7, 0.3
+    try:
+        parts = [p.strip() for p in modes_str.split(",") if p.strip()]
+        for p in parts:
+            k, v = p.split(":")
+            k = k.strip().lower()
+            v = float(v.strip())
+            if k == "home":
+                home_w = v
+            elif k == "zero":
+                zero_w = v
+    except Exception:
+        pass  # fall back to defaults on parse failure
+
+    # If nothing is enabled, return None — the caller will skip wiring.
+    if sigma_max <= 0.0 and replace_prob <= 0.0:
+        return None
+    return StateAugmenter(
+        sigma_max=sigma_max,
+        sigma_min=sigma_min,
+        curriculum_steps=curriculum_steps,
+        replace_prob=replace_prob,
+        mode_home_weight=home_w,
+        mode_zero_weight=zero_w,
+        home_jitter_sigma=home_jitter_sigma,
+        gripper_noise_scale=gripper_noise_scale,
+        state_std=state_std,
+    )
+
+
+# Task-string wording templates. Each is a `.format(celeb=...)` template.
+# The model should see all of these during training so it doesn't overfit to
+# one specific phrasing (which would fail at deploy if the demo prompt varies).
+# The first two are the canonical/recorded demo prompts — kept at higher
+# baseline weight via EVAL3_TASK_AUG_CANONICAL_P.
+#
+# The varied pool emphasizes "image of" / "photo of" / "picture of" / "print"
+# phrasings — these match what the robot literally sees (a printed photo
+# of a celebrity, not the actual person) and help the text encoder learn
+# image-grounded language.
+TASK_TEMPLATES = (
+    # Canonical demo prompts (indices 0..1) — used when the canonical roll wins.
+    "Place the coke on {celeb}",                       # canonical demo prompt
+    "Place the coke on the {celeb}",                   # original recorded wording
+    # Varied pool (indices 2..) — uniformly sampled when the varied roll wins.
+    "Put the coke on {celeb}",                         # synonym verb
+    "Put the coke on the {celeb}",
+    "Place the coke can on {celeb}",                   # "coke can" instead of "coke"
+    "Drop the coke on {celeb}",                        # different verb
+    "Move the coke to {celeb}",                        # different verb structure
+    # Image-grounded phrasings — what the robot literally sees:
+    "Place the coke on the image of {celeb}",
+    "Place the coke on the photo of {celeb}",
+    "Place the coke on the picture of {celeb}",
+    "Put the coke on the image of {celeb}",
+    "Put the coke on the photo of {celeb}",
+    "Put the coke on the picture of {celeb}",
+    "Drop the coke on the image of {celeb}",
+    "Drop the coke on the photo of {celeb}",
+    "Place the can on the image of {celeb}",
+    "Place the can on the photo of {celeb}",
+    "Place the can on the {celeb} print",
+    "Place the coke on {celeb}'s image",
+    "Place the coke on {celeb}'s photo",
+    "Move the coke to the image of {celeb}",
+)
+
 
 class TaskAugmenter:
     """Picklable callable that randomly rewrites Eval 3 task strings.
@@ -63,9 +403,19 @@ class TaskAugmenter:
     attributes — to ship to worker processes. Local closures from
     ``make_task_augmenter.<locals>.aug`` are not picklable.
 
-    Variant probabilities intentionally stay close to demo-day wording:
-      80 %  "Place the coke on <Celeb>"           (canonical demo prompt)
-      20 %  "Place the coke on the <Celeb>"       (original recorded wording)
+    Two-tier wording strategy:
+
+      1. With probability ``canonical_p`` (default 0.8) emit one of the
+         CANONICAL demo prompts:
+            * "Place the coke on <Celeb>"             (demo, weight 0.7)
+            * "Place the coke on the <Celeb>"         (recorded, weight 0.3)
+      2. With probability ``1 - canonical_p`` emit a uniformly-random
+         non-canonical wording from the remaining ``TASK_TEMPLATES`` to
+         build language robustness against demo-day prompt drift.
+
+    The celebrity name is always preserved exactly so the language→celebrity
+    mapping the aux head trains on stays intact. Unknown tasks are passed
+    through unchanged (defensive).
     """
 
     def __init__(self, seed: int = 42, canonical_p: float = 0.8):
@@ -74,17 +424,27 @@ class TaskAugmenter:
         # Use a Python random.Random with the supplied seed. Each forked worker
         # will get its own copy after pickling — that's fine for augmentation.
         self._rng = random.Random(seed)
+        # Pre-split canonical vs non-canonical pools (templates[0..1] vs [2..])
+        self._canonical_templates = TASK_TEMPLATES[:2]
+        self._varied_templates = TASK_TEMPLATES[2:]
 
     def __call__(self, task: str) -> str:
         if not isinstance(task, str):
             return task
         for celeb in KNOWN_CELEBRITIES:
             if celeb in task:
-                roll = self._rng.random()
-                if roll < self._canonical_p:
-                    return f"Place the coke on {celeb}"
+                # First decide canonical vs varied.
+                if self._rng.random() < self._canonical_p:
+                    # Canonical pool: 70/30 split between the two demo wordings
+                    # (preserves the original behavior of this augmenter).
+                    if self._rng.random() < 0.7:
+                        return self._canonical_templates[0].format(celeb=celeb)
+                    else:
+                        return self._canonical_templates[1].format(celeb=celeb)
                 else:
-                    return f"Place the coke on the {celeb}"
+                    # Varied pool: uniform pick from non-canonical templates.
+                    template = self._rng.choice(self._varied_templates)
+                    return template.format(celeb=celeb)
         return task  # unknown celebrity — leave untouched
 
     def __reduce__(self):
@@ -532,6 +892,7 @@ class Eval3PrepDataset(Dataset):
         task_aug_fn: Callable[[str], str] | None = None,
         bg_aug_fn: Callable[[torch.Tensor], torch.Tensor] | None = None,
         print_aug_fn: Callable[[torch.Tensor], torch.Tensor] | None = None,
+        state_aug_fn: Callable[[torch.Tensor], torch.Tensor] | None = None,
         image_key: str = "observation.images.front",
         episode_filter: list[int] | None = None,
         truncate_at_placement: bool = False,
@@ -546,12 +907,20 @@ class Eval3PrepDataset(Dataset):
         gripper_open_threshold: float = 20.0,
         action_smooth_window: int = 0,
         action_smooth_gripper: bool = False,
+        target_position_idx: int | None = None,
     ):
         self._ds = dataset
         self._task_aug_fn = task_aug_fn
         self._bg_aug_fn = bg_aug_fn
         self._print_aug_fn = print_aug_fn
+        self._state_aug_fn = state_aug_fn
         self._image_key = image_key
+        # Auxiliary-head supervision label (0=left, 1=middle, 2=right, None=unknown
+        # -> emit -100 = CrossEntropy ignore_index so old single-celeb datasets
+        # like `taylor_swift_1` don't contribute aux gradient).
+        self._target_position_idx = (
+            int(target_position_idx) if target_position_idx is not None else -100
+        )
 
         # Pull episode boundaries from the underlying meta. LeRobotDatasetMetadata.episodes
         # is a pandas DataFrame with columns ``dataset_from_index`` and ``dataset_to_index``.
@@ -764,6 +1133,20 @@ class Eval3PrepDataset(Dataset):
             if self._print_aug_fn is not None:
                 img = self._print_aug_fn(img)
             row[self._image_key] = img
+        # Apply state augmentation (Gaussian noise with optional curriculum,
+        # HOME/zero replacement). See `StateAugmenter` for the design rationale.
+        if self._state_aug_fn is not None and "observation.state" in row:
+            if not mutated:
+                row = dict(row)
+                mutated = True
+            row["observation.state"] = self._state_aug_fn(row["observation.state"])
+        # Emit the auxiliary-head supervisory label. Always emit so the
+        # default collate stacks a long tensor — value is -100 for datasets
+        # without a known board slot (CrossEntropy ignore_index).
+        if not mutated:
+            row = dict(row)
+            mutated = True
+        row["target_position"] = torch.as_tensor(self._target_position_idx, dtype=torch.long)
         return row
 
     # ----- Catch-all proxy --------------------------------------------------

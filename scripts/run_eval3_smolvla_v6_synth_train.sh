@@ -56,13 +56,52 @@ SAVE_FREQ="${EVAL3_SAVE_FREQ:-10000}"
 export EVAL3_EXTRA_REPOS="$EXTRA_REPOS"
 export EVAL3_MAX_FRAMES_PER_EP="0"
 export EVAL3_TASK_AUG="1"
-export EVAL3_TASK_AUG_CANONICAL_P="1.0"
+# Language augmentation: canonical_p = probability of a "canonical demo
+# wording" ("Place the coke on X" or "Place the coke on the X"). The rest
+# (1 - canonical_p) draws uniformly from 8 varied wordings (e.g. "Put the
+# coke on X", "Place the coke on the image of X", "Drop the coke on X").
+# 0.7 gives ~30% varied frames — enough language diversity to robustify the
+# tokenizer's representation without diluting the dominant demo prompt.
+# Set to 1.0 to disable variation (original v6 behavior).
+export EVAL3_TASK_AUG_CANONICAL_P="${EVAL3_TASK_AUG_CANONICAL_P:-0.7}"
 export EVAL3_BG_REPLACE="0"
 export EVAL3_BG_REPLACE_P="0.0"
 export EVAL3_PRINT_SHUFFLE="0"
 export EVAL3_PRINT_SHUFFLE_P="0.0"
 export EVAL3_MASK_DIR="${EVAL3_MASK_DIR:-outputs/eval3_masks}"
 export EVAL3_BG_DIR="${EVAL3_BG_DIR:-outputs/eval3_backgrounds}"
+
+# Auxiliary position-classification head (eval3_smolvla_aux_head.py). Forces
+# SmolVLA's expert hidden state to encode language-image binding, breaking
+# the (state, image) -> action shortcut that v6_synth_15k learned. 0 disables.
+export EVAL3_AUX_POS_LOSS_WEIGHT="${EVAL3_AUX_POS_LOSS_WEIGHT:-0.3}"
+export EVAL3_AUX_POS_DROPOUT="${EVAL3_AUX_POS_DROPOUT:-0.1}"
+export EVAL3_AUX_POS_HIDDEN="${EVAL3_AUX_POS_HIDDEN:-256}"
+
+# State augmentation (StateAugmenter in eval3_dataset_prep.py). Breaks the
+# observation.state -> action shortcut by injecting noise + occasionally
+# replacing state with a canonical HOME pose. See docs/eval3/aux_head_playbook.md
+# for the full design rationale.
+#
+# Cosine-decay curriculum on Gaussian noise: sigma_max early, sigma_min late.
+# **sigma is in NORMALIZED STDDEV UNITS** (not raw degrees). 0.3 means
+# "perturb each joint by 0.3 of its per-joint training std", giving uniform
+# effect across joints in the space the model sees. Raw-degree equivalent
+# at a typical std=30° is 9° of effective noise. Per-joint stddev is pulled
+# from the primary dataset's stats by eval3_concat_patch.py and passed into
+# the augmenter.
+export EVAL3_STATE_NOISE_SIGMA_MAX="${EVAL3_STATE_NOISE_SIGMA_MAX:-0.3}"     # 30% of one stddev at start
+export EVAL3_STATE_NOISE_SIGMA_MIN="${EVAL3_STATE_NOISE_SIGMA_MIN:-0.05}"    # 5% of one stddev at end
+export EVAL3_STATE_NOISE_CURRICULUM_STEPS="${EVAL3_STATE_NOISE_CURRICULUM_STEPS:-${STEPS}}"
+# State replacement: with this prob, replace observation.state for one of the
+# two modes (HOME = canonical-pose-with-jitter, zero = all zeros). HOME breaks
+# the shortcut at the decision moment; zero is more aggressive.
+export EVAL3_STATE_REPLACE_PROB="${EVAL3_STATE_REPLACE_PROB:-0.4}"
+export EVAL3_STATE_REPLACE_MODES="${EVAL3_STATE_REPLACE_MODES:-home:0.7,zero:0.3}"
+export EVAL3_STATE_HOME_JITTER_SIGMA="${EVAL3_STATE_HOME_JITTER_SIGMA:-1.0}"
+# Gripper-component noise is scaled down because gripper is near-binary;
+# full noise would destroy grasp/release labels.
+export EVAL3_STATE_GRIPPER_NOISE_SCALE="${EVAL3_STATE_GRIPPER_NOISE_SCALE:-0.1}"
 
 unset EVAL3_SWIFT_EPISODE_FILTER
 unset EVAL3_LECUN_EPISODE_FILTER
@@ -80,6 +119,9 @@ echo "   max_frames_per_ep     : $EVAL3_MAX_FRAMES_PER_EP"
 echo "   task_aug canonical p  : $EVAL3_TASK_AUG_CANONICAL_P"
 echo "   bg_replace            : $EVAL3_BG_REPLACE"
 echo "   print_shuffle         : $EVAL3_PRINT_SHUFFLE"
+echo "   aux_pos_loss_weight   : $EVAL3_AUX_POS_LOSS_WEIGHT"
+echo "   aux_pos_dropout       : $EVAL3_AUX_POS_DROPOUT"
+echo "   aux_pos_hidden        : $EVAL3_AUX_POS_HIDDEN"
 echo "   save_freq             : $SAVE_FREQ"
 echo "   output dir            : $OUT"
 
@@ -99,7 +141,11 @@ fi
 # Conservative image transforms identical to v5: color/lighting, sharpness,
 # small geometry. Synth pipeline already does background + print + tile
 # composition; only need a light sim2real cushion here.
-TFS_JSON='{"brightness":{"weight":2.0,"type":"ColorJitter","kwargs":{"brightness":[0.75,1.25]}},"contrast":{"weight":2.0,"type":"ColorJitter","kwargs":{"contrast":[0.75,1.25]}},"saturation":{"weight":1.0,"type":"ColorJitter","kwargs":{"saturation":[0.8,1.2]}},"hue":{"weight":0.5,"type":"ColorJitter","kwargs":{"hue":[-0.03,0.03]}},"sharpness":{"weight":0.75,"type":"SharpnessJitter","kwargs":{"sharpness":[0.8,1.2]}},"affine":{"weight":1.0,"type":"RandomAffine","kwargs":{"degrees":[-2.0,2.0],"translate":[0.02,0.02]}},"perspective":{"weight":0.75,"type":"RandomPerspective","kwargs":{"distortion_scale":0.12,"p":0.3}}}'
+#
+# Added: RandomErasing — masks small rectangular regions, forces the model
+# to handle occluded image content (visual regularizer; pairs with the
+# state-augmentation work for breaking the visuomotor shortcut).
+TFS_JSON='{"brightness":{"weight":2.0,"type":"ColorJitter","kwargs":{"brightness":[0.75,1.25]}},"contrast":{"weight":2.0,"type":"ColorJitter","kwargs":{"contrast":[0.75,1.25]}},"saturation":{"weight":1.0,"type":"ColorJitter","kwargs":{"saturation":[0.8,1.2]}},"hue":{"weight":0.5,"type":"ColorJitter","kwargs":{"hue":[-0.03,0.03]}},"sharpness":{"weight":0.75,"type":"SharpnessJitter","kwargs":{"sharpness":[0.8,1.2]}},"affine":{"weight":1.0,"type":"RandomAffine","kwargs":{"degrees":[-2.0,2.0],"translate":[0.02,0.02]}},"perspective":{"weight":0.75,"type":"RandomPerspective","kwargs":{"distortion_scale":0.12,"p":0.3}},"random_erasing":{"weight":1.0,"type":"RandomErasing","kwargs":{"p":0.25,"scale":[0.02,0.15],"ratio":[0.3,3.3],"value":0}}}'
 
 exec python scripts/train_eval3_smolvla.py \
   --policy.path="$POLICY_PATH" \
