@@ -286,16 +286,36 @@ def _pad_7(x: torch.Tensor) -> torch.Tensor:
 
 
 def _state_from_observation(obs_processed: dict[str, Any]) -> torch.Tensor:
-    if STATE_KEY not in obs_processed:
-        raise KeyError(f"Robot observation is missing {STATE_KEY}; available keys={sorted(obs_processed)}")
-    return _pad_7(torch.as_tensor(obs_processed[STATE_KEY], dtype=torch.float32))
+    # Dataset-format key is preferred; fall back to assembling from raw per-joint
+    # `<motor>.pos` keys (what so_follower.get_observation() actually returns).
+    if STATE_KEY in obs_processed:
+        return _pad_7(torch.as_tensor(obs_processed[STATE_KEY], dtype=torch.float32))
+    # ACTION_NAMES_6 already include the ".pos" suffix
+    if all(k in obs_processed for k in ACTION_NAMES_6):
+        vec = torch.tensor(
+            [float(obs_processed[k]) for k in ACTION_NAMES_6], dtype=torch.float32,
+        )
+        return _pad_7(vec)
+    raise KeyError(
+        f"Robot observation is missing {STATE_KEY} and per-joint {list(ACTION_NAMES_6)}; "
+        f"available keys={sorted(obs_processed)}"
+    )
 
 
 def _image_from_observation(obs_processed: dict[str, Any], image_size: int) -> torch.Tensor:
-    if IMAGE_KEY not in obs_processed:
-        image_keys = [k for k in obs_processed if "image" in k]
-        raise KeyError(f"Robot observation is missing {IMAGE_KEY}; image keys={image_keys}")
-    return _to_chw_float(obs_processed[IMAGE_KEY], image_size=image_size)
+    # Dataset-format key is preferred; fall back to the raw camera key
+    # ('front' for --robot.cameras='{front: ...}') which is what
+    # so_follower.get_observation() actually returns.
+    img = obs_processed.get(IMAGE_KEY)
+    bare = IMAGE_KEY.removeprefix("observation.images.")
+    if img is None:
+        img = obs_processed.get(bare)
+    if img is None:
+        raise KeyError(
+            f"Robot observation is missing {IMAGE_KEY!r} or bare {bare!r}; "
+            f"available keys={sorted(obs_processed)}"
+        )
+    return _to_chw_float(img, image_size=image_size)
 
 
 def _flower_batch(
@@ -400,6 +420,9 @@ def _save_first_frame(obs_processed: dict[str, Any], path: Path) -> None:
         from PIL import Image
 
         image = obs_processed.get(IMAGE_KEY)
+        if image is None:
+            # raw-robot fallback: bare camera key like 'front'
+            image = obs_processed.get(IMAGE_KEY.removeprefix("observation.images."))
         if image is None:
             return
         x = torch.as_tensor(image)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Eval 3 deploy battery — runs one of nine checkpoints with the friend-recipe flags.
+# Eval 3 deploy battery — runs one of thirteen checkpoints with the friend-recipe flags.
 #
 # Friend's recipe (2026-05-18) — four checkpoints, deploy biases ON:
 #   v8                : eval3-vla-v8-gripper-repair-smooth-50k            (3-way, latest smoothed)
@@ -10,8 +10,15 @@
 # 2026-05-19 additions — biases DEACTIVATED (raw-policy deploy):
 #   v6_synth_25k      : eval3-smolvla-3way-25k-b128-v6-synth-step25k      (3-way, ChArUco-synth final, 2.86 epochs, loss=0.017)
 #   v6_synth_15k      : eval3-smolvla-3way-25k-b128-v6-synth-step15k      (3-way, ChArUco-synth mid, 1.67 epochs, loss=0.021)
+#   v6_synth_5k       : eval3-smolvla-3way-25k-b128-v6-synth-step5k       (3-way, ChArUco-synth early, 0.56 epochs)
+#   v6_synth5k_500    : eval3-smolvla-3way-5k-b128-v6-synth-step500       (3-way, 5k-step run, very early)
+#   v6_synth5k_1k     : eval3-smolvla-3way-5k-b128-v6-synth-step1k        (3-way, 5k-step run, 1000 steps)
+#   v6_synth5k_1500   : eval3-smolvla-3way-5k-b128-v6-synth-step1500      (3-way, 5k-step run, 1500 steps)
 #   v9_charuco        : eval3-vla-v9-smolvla-fresh-charuco-50k            (3-way, charuco-only, fresh-from-base)
 #   v9_new66_charuco  : eval3-vla-v9-smolvla-fresh-new66-charuco-50k      (3-way, new66 + charuco, fresh-from-base)
+#   v6_pinned_warm15k_1k : eval3-smolvla-3way-2k-b128-v6-pinned-warm15k-step1k (3-way, pins-pool synth, warm-started from 15k, mid)
+#   v6_pinned_warm15k_2k : eval3-smolvla-3way-2k-b128-v6-pinned-warm15k-step2k (3-way, pins-pool synth, warm-started from 15k, final)
+#   v10_balanced_new66_10k : eval3-smolvla-v10-balanced-new66-10k             (3-way, v4-balanced synth + new66 real, identity-fix path)
 #
 # FlowerVLA (NOT supported by eval3_vla_deploy.py — entry exits with help):
 #   flower_new66      : eval3-flower-new66-50k                            (Florence-2 + FlowerVLA, separate deploy needed)
@@ -26,8 +33,15 @@
 #   ./scripts/run_eval3_deploy_battery.sh v7_d
 #   ./scripts/run_eval3_deploy_battery.sh v6_synth_25k
 #   ./scripts/run_eval3_deploy_battery.sh v6_synth_15k
+#   ./scripts/run_eval3_deploy_battery.sh v6_synth_5k
+#   ./scripts/run_eval3_deploy_battery.sh v6_synth5k_500
+#   ./scripts/run_eval3_deploy_battery.sh v6_synth5k_1k
+#   ./scripts/run_eval3_deploy_battery.sh v6_synth5k_1500
 #   ./scripts/run_eval3_deploy_battery.sh v9_charuco
 #   ./scripts/run_eval3_deploy_battery.sh v9_new66_charuco
+#   ./scripts/run_eval3_deploy_battery.sh v6_pinned_warm15k_1k
+#   ./scripts/run_eval3_deploy_battery.sh v6_pinned_warm15k_2k
+#   ./scripts/run_eval3_deploy_battery.sh v10_balanced_new66_10k
 #   ./scripts/run_eval3_deploy_battery.sh flower_new66    (prints support note + exits)
 #   ./scripts/run_eval3_deploy_battery.sh --help          (print this comment block)
 #
@@ -96,6 +110,26 @@ case "$CHECKPOINT_NAME" in
     DATASET_REPO_ID="RobotLearningVLA/dataset_v3_synth_taylor_swift_left_2"
     EXTRA_ARGS+=("${NO_BIASES[@]}")
     ;;
+  v6_synth_5k)
+    POLICY_PATH="RobotLearningVLA/eval3-smolvla-3way-25k-b128-v6-synth-step5k"
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v3_synth_taylor_swift_left_2"
+    EXTRA_ARGS+=("${NO_BIASES[@]}")
+    ;;
+  v6_synth5k_500)
+    POLICY_PATH="RobotLearningVLA/eval3-smolvla-3way-5k-b128-v6-synth-step500"
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v3_synth_taylor_swift_left_2"
+    EXTRA_ARGS+=("${NO_BIASES[@]}")
+    ;;
+  v6_synth5k_1k)
+    POLICY_PATH="RobotLearningVLA/eval3-smolvla-3way-5k-b128-v6-synth-step1k"
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v3_synth_taylor_swift_left_2"
+    EXTRA_ARGS+=("${NO_BIASES[@]}")
+    ;;
+  v6_synth5k_1500)
+    POLICY_PATH="RobotLearningVLA/eval3-smolvla-3way-5k-b128-v6-synth-step1500"
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v3_synth_taylor_swift_left_2"
+    EXTRA_ARGS+=("${NO_BIASES[@]}")
+    ;;
   v9_charuco)
     POLICY_PATH="RobotLearningVLA/eval3-vla-v9-smolvla-fresh-charuco-50k"
     DATASET_REPO_ID="RobotLearningVLA/dataset_v3_synth_taylor_swift_left_2"
@@ -104,6 +138,23 @@ case "$CHECKPOINT_NAME" in
   v9_new66_charuco)
     POLICY_PATH="RobotLearningVLA/eval3-vla-v9-smolvla-fresh-new66-charuco-50k"
     # v9_new66_charuco was trained on the v2 truncated corpus, not the v3 synth one.
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v2_taylor_swift_left_1_v6_truncated"
+    EXTRA_ARGS+=("${NO_BIASES[@]}")
+    ;;
+  v6_pinned_warm15k_1k)
+    POLICY_PATH="RobotLearningVLA/eval3-smolvla-3way-2k-b128-v6-pinned-warm15k-step1k"
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v3_synth_pinned_taylor_swift_left_1"
+    EXTRA_ARGS+=("${NO_BIASES[@]}")
+    ;;
+  v6_pinned_warm15k_2k)
+    POLICY_PATH="RobotLearningVLA/eval3-smolvla-3way-2k-b128-v6-pinned-warm15k-step2k"
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v3_synth_pinned_taylor_swift_left_1"
+    EXTRA_ARGS+=("${NO_BIASES[@]}")
+    ;;
+  v10_balanced_new66_10k)
+    POLICY_PATH="RobotLearningVLA/eval3-smolvla-v10-balanced-new66-10k"
+    # v10 v4_balanced_new66 recipe's training primary is the v2 truncated new66 left repo
+    # (extras = rest of new66 + 3 v4 balanced synth datasets — see scripts/run_eval3_smolvla_v10_train.sh).
     DATASET_REPO_ID="RobotLearningVLA/dataset_v2_taylor_swift_left_1_v6_truncated"
     EXTRA_ARGS+=("${NO_BIASES[@]}")
     ;;
@@ -123,7 +174,7 @@ EOF
     exit 2
     ;;
   *)
-    echo "unknown checkpoint name: $CHECKPOINT_NAME (use v8 / v6_combined / v6_new / v7_d / v6_synth_25k / v6_synth_15k / v9_charuco / v9_new66_charuco / flower_new66)" >&2
+    echo "unknown checkpoint name: $CHECKPOINT_NAME (use v8 / v6_combined / v6_new / v7_d / v6_synth_25k / v6_synth_15k / v6_synth_5k / v6_synth5k_500 / v6_synth5k_1k / v6_synth5k_1500 / v9_charuco / v9_new66_charuco / v6_pinned_warm15k_1k / v6_pinned_warm15k_2k / v10_balanced_new66_10k / flower_new66)" >&2
     exit 1
     ;;
 esac
@@ -163,5 +214,5 @@ exec python scripts/eval3_vla_deploy.py \
   "${COMMON_ARGS[@]}" \
   --dataset_repo_id="$DATASET_REPO_ID" \
   --policy.path="$POLICY_PATH" \
-  "${EXTRA_ARGS[@]}" \
+  ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} \
   "$@"
