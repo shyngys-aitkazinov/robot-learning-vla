@@ -154,6 +154,8 @@ Decision tree:
 
 ### 5b. Robot deploy (the rig with the SO-101)
 
+Deploy-time prompt normalization (ported from [TongxiHu/vla_eval1](https://github.com/TongxiHu/vla_eval1)) rewrites eval-day phrasing to the same canonical strings used at train time (`EVAL3_TASK_AUG_CANONICAL_P=1.0`). Examples: `"Place the coke on the Taylor Swift"` → `"Place the coke on Taylor Swift"`. The rollout JSONL records both `raw_task` and `task`. Disable with `--no_normalize_task` when debugging.
+
 Use the three **canonical** prompts only. No "the", no `--target_slot`:
 
 - `Place the coke on Taylor Swift`
@@ -170,6 +172,18 @@ python tools/eval3_check_deploy_command.py \
 ```
 
 Want `PASS (cameras=OK, task=OK)` on the final line. Then run the deploy directly via [scripts/eval3_vla_deploy.py](../../scripts/eval3_vla_deploy.py) (the v10 alias in `run_eval3_deploy_battery.sh` is deferred — see appendix). Use the v9 charuco alias's flag block as a template since it's the closest match:
+
+Wrapper (forwards to the script below):
+
+```bash
+./scripts/run_eval3_vla_deploy.sh \
+    --robot.type=so101_follower \
+    ... \
+    --task='Place the coke on the Taylor Swift' \
+    --n_rollouts=3
+```
+
+Direct:
 
 ```bash
 python scripts/eval3_vla_deploy.py \
@@ -203,6 +217,33 @@ Sanity-check the JSONL output under `outputs/eval3_rollouts/`: final-second `wri
 - **v10 aliases in [scripts/run_eval3_deploy_battery.sh](../../scripts/run_eval3_deploy_battery.sh).** Deferred until the v10 Hub name is final. The deploy command above is the same minus the alias. Once you've pushed the checkpoint and confirmed the name, follow the pattern of the `v9_charuco` block — copy it, change `POLICY_PATH`, keep the `NO_BIASES` block off (v10 expects the friend-recipe biases like v8 does, not the raw-policy biases of v9).
 - **Synth-specific mask extraction.** [scripts/eval3_concat_patch.py](../../scripts/eval3_concat_patch.py) already guards against mismatched v2 print masks on synth repos (Fix D from the original plan). To re-enable mask-based augs on synth, you'd need a per-slot mask extracted from the ChArUco-composited frames; that's a downstream item that only matters if v10 underperforms.
 - **Two-stage slot-selector deploy.** Already available behind `EVAL3_SLOT_TASK_AUG` and described in [docs/eval3/abcd_model_eval.md](abcd_model_eval.md). Escape hatch only.
+
+## Comparison with vla_eval1 (what we adopted vs skipped)
+
+| vla_eval1 pattern | Eval 3 status |
+|-------------------|---------------|
+| Deploy prompt normalizer | **Adopted** — [`tools/eval3_prompt_normalize.py`](../../tools/eval3_prompt_normalize.py), wired in [`scripts/eval3_vla_deploy.py`](../../scripts/eval3_vla_deploy.py) |
+| Multi-rollout + go-home | **Adopted** — `--n_rollouts`, `--go_home_after_rollout`, `--home_duration_s` |
+| `run_eval3_vla_deploy.sh` wrapper | **Adopted** |
+| Train daemon (PID / log / kill) | **Adopted** — [`scripts/run_eval3_train_daemon.sh`](../../scripts/run_eval3_train_daemon.sh), [train_daemon.md](train_daemon.md) |
+| H100 expert-only + bf16/AMP | **Adopted** — [`scripts/run_eval3_smolvla_h100_expert.sh`](../../scripts/run_eval3_smolvla_h100_expert.sh) (`EVAL3_FREEZE_VISION`, `EVAL3_TRAIN_EXPERT_ONLY`, `EVAL3_USE_AMP`) |
+| Step budget calculator | **Adopted** — [`tools/eval3_train_step_budget.py`](../../tools/eval3_train_step_budget.py) |
+| Optional W&B | **Adopted** — `EVAL3_WANDB=1` in [`scripts/run_eval3_smolvla_aug_train.sh`](../../scripts/run_eval3_smolvla_aug_train.sh) |
+| Per-checkpoint Hub push + `step-XXXXXX` tags | **Adopted** — [`scripts/eval3_train_hub_patch.py`](../../scripts/eval3_train_hub_patch.py), `EVAL3_HUB_PUSH=1 EVAL3_HUB_REPO=...` |
+| VLM spatial bowl routing / HSV layout | **Skipped** — Eval 1 bowls, not celebrity faces |
+| 54-repo eval2 concat / banana color synth | **Skipped** — use [`scripts/eval3_concat_patch.py`](../../scripts/eval3_concat_patch.py) + v4 balanced synth instead |
+
+Detached H100 training example:
+
+```bash
+EVAL3_HUB_PUSH=1 EVAL3_HUB_REPO=RobotLearningVLA/eval3-smolvla-v10-balanced-h100-50k \
+  EVAL3_WANDB=1 EVAL3_WANDB_PROJECT=eval3-smolvla-v10 \
+  EVAL3_TRAIN_CMD=./scripts/run_eval3_smolvla_h100_expert.sh \
+  EVAL3_JOB_NAME=eval3-h100-expert \
+  ./scripts/run_eval3_train_daemon.sh start
+```
+
+If celebrity gates still fail after v4 data, try **one** full fine-tune ablation before blaming data: `EVAL3_TRAIN_EXPERT_ONLY=0 EVAL3_FREEZE_VISION=0` on the H100 expert launcher.
 
 ## Cross-references
 

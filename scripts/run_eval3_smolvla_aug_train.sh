@@ -132,6 +132,41 @@ echo "   lecun_episode_filter  : $EVAL3_LECUN_EPISODE_FILTER"
 echo "   obama_episode_filter  : $EVAL3_OBAMA_EPISODE_FILTER"
 echo "   save_freq             : $SAVE_FREQ"
 echo "   output dir            : $OUT"
+echo "   freeze_vision         : ${EVAL3_FREEZE_VISION:-0}"
+echo "   train_expert_only     : ${EVAL3_TRAIN_EXPERT_ONLY:-0}"
+echo "   policy use_amp        : ${EVAL3_USE_AMP:-0}"
+echo "   num_workers           : ${EVAL3_NUM_WORKERS:-4}"
+echo "   wandb                 : ${EVAL3_WANDB:-0}"
+echo "   hub push              : ${EVAL3_HUB_PUSH:-0} (${EVAL3_HUB_REPO:-})"
+
+# Optional vla_eval1-style H100 flags (env-gated; macOS defaults leave these off).
+EXTRA_TRAIN_ARGS=()
+if [[ "${EVAL3_FREEZE_VISION:-0}" == "1" ]]; then
+  EXTRA_TRAIN_ARGS+=(--policy.freeze_vision_encoder=true)
+elif [[ "${EVAL3_FREEZE_VISION:-0}" == "0" && -n "${EVAL3_FREEZE_VISION+x}" ]]; then
+  EXTRA_TRAIN_ARGS+=(--policy.freeze_vision_encoder=false)
+fi
+if [[ "${EVAL3_TRAIN_EXPERT_ONLY:-0}" == "1" ]]; then
+  EXTRA_TRAIN_ARGS+=(--policy.train_expert_only=true)
+elif [[ "${EVAL3_TRAIN_EXPERT_ONLY:-0}" == "0" && -n "${EVAL3_TRAIN_EXPERT_ONLY+x}" ]]; then
+  EXTRA_TRAIN_ARGS+=(--policy.train_expert_only=false)
+fi
+if [[ "${EVAL3_USE_AMP:-0}" == "1" ]]; then
+  EXTRA_TRAIN_ARGS+=(--policy.use_amp=true)
+fi
+if [[ -n "${EVAL3_NUM_WORKERS:-}" ]]; then
+  EXTRA_TRAIN_ARGS+=(--num_workers="$EVAL3_NUM_WORKERS")
+fi
+if [[ "${EVAL3_WANDB:-0}" == "1" ]]; then
+  EXTRA_TRAIN_ARGS+=(--wandb.enable=true)
+  EXTRA_TRAIN_ARGS+=(--wandb.project="${EVAL3_WANDB_PROJECT:-eval3-smolvla}")
+  if [[ -n "${EVAL3_WANDB_ENTITY:-}" ]]; then
+    EXTRA_TRAIN_ARGS+=(--wandb.entity="$EVAL3_WANDB_ENTITY")
+  fi
+  if [[ -n "${EVAL3_WANDB_RUN_ID:-}" ]]; then
+    EXTRA_TRAIN_ARGS+=(--wandb.run_id="$EVAL3_WANDB_RUN_ID")
+  fi
+fi
 
 # lerobot accepts --dataset.image_transforms.tfs only as a single JSON Dict
 # (the deeper dotted paths like --dataset.image_transforms.tfs.brightness.weight
@@ -179,4 +214,5 @@ exec python scripts/train_eval3_smolvla.py \
   --steps="$STEPS" \
   --save_freq="$SAVE_FREQ" \
   --batch_size="$BATCH" \
+  "${EXTRA_TRAIN_ARGS[@]}" \
   "$@"

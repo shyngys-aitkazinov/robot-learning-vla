@@ -35,8 +35,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
+_ROOT = _SCRIPT_DIR.parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
+if str(_ROOT / "tools") not in sys.path:
+    sys.path.insert(0, str(_ROOT / "tools"))
+
+from eval3_prompt_normalize import normalize_eval3_task  # noqa: E402
 
 from eval3_lerobot_shim import apply as _eval3_shim_apply
 
@@ -209,6 +214,11 @@ class Eval3VLADeployConfig:
     dry_run: bool = False
     play_sounds: bool = False
     rollout_log_dir: str = "outputs/eval3_rollouts"
+    n_rollouts: int = 1
+    go_home_after_rollout: bool = True
+    home_duration_s: float = 3.0
+    normalize_task: bool = True
+    raw_task: str = field(default="", repr=False)
     policy: PreTrainedConfig | None = None
 
     def __post_init__(self) -> None:
@@ -237,9 +247,45 @@ class Eval3VLADeployConfig:
                 )
             self.task = line.strip()
 
+        self.raw_task = self.task
+        if self.normalize_task and not self.target_slot.strip():
+            norm = normalize_eval3_task(self.task)
+            if norm.changed:
+                logging.info(
+                    "Normalized deploy task: %r -> %r",
+                    norm.raw,
+                    norm.normalized,
+                )
+            self.task = norm.normalized
+
     @classmethod
     def __get_path_fields__(cls) -> list[str]:
         return ["policy"]
+
+
+def _go_home(
+    robot: Robot,
+    home_positions: dict[str, float],
+    *,
+    duration_s: float,
+    fps: int,
+) -> None:
+    """Drive joints back toward the pose captured at connect (vla_eval1 pattern)."""
+    if not home_positions:
+        return
+    logging.info("Returning to home position for %.1fs …", duration_s)
+    deadline = time.perf_counter() + float(duration_s)
+    interval = 1.0 / max(int(fps), 1)
+    while time.perf_counter() < deadline:
+        t0 = time.perf_counter()
+        robot.send_action(home_positions)
+        precise_sleep(max(0.0, interval - (time.perf_counter() - t0)))
+    logging.info("Home return finished.")
+
+
+def _capture_home_positions(robot: Robot) -> dict[str, float]:
+    obs = robot.get_observation()
+    return {k: float(v) for k, v in obs.items() if k.endswith(".pos")}
 
 
 def _deploy_loop(
@@ -486,8 +532,15 @@ def eval3_vla_deploy(cfg: Eval3VLADeployConfig) -> None:
         interpolator = ActionInterpolator(multiplier=cfg.interpolation_multiplier)
 
     if cfg.dry_run:
-        logging.info("Dry run OK — policy and processors loaded; skipping robot I/O.")
+        logging.info(
+            "Dry run OK — policy and processors loaded; task=%r (raw=%r); skipping robot I/O.",
+            cfg.task,
+            cfg.raw_task or cfg.task,
+        )
         return
+
+    if cfg.n_rollouts < 1:
+        raise ValueError("--n_rollouts must be >= 1.")
 
     if cfg.display_data:
         from lerobot.utils.visualization_utils import init_rerun
@@ -496,65 +549,91 @@ def eval3_vla_deploy(cfg: Eval3VLADeployConfig) -> None:
 
     _, robot_action_processor, robot_observation_processor = make_default_processors()
 
-    rollout_log_path: Path | None = None
-    rollout_header: dict | None = None
-    if cfg.rollout_log_dir:
-        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        rollout_log_path = Path(cfg.rollout_log_dir) / f"rollout_{ts}.jsonl"
-        first_frame_path = rollout_log_path.with_suffix(".firstframe.png")
-        stats_counts = _checkpoint_stats_counts(str(cfg.policy.pretrained_path))
-        rollout_header = {
-            "instruction": cfg.task,
-            "target_slot": cfg.target_slot,
-            "episode_time_s": cfg.episode_time_s,
-            "fps": cfg.fps,
-            "policy_path": str(cfg.policy.pretrained_path),
-            "policy_sha": _policy_sha(str(cfg.policy.pretrained_path)),
-            "checkpoint_stats_count": stats_counts,
-            "dataset_repo_id": cfg.dataset_repo_id,
-            "rename_map": cfg.rename_map,
-            "interpolation_multiplier": cfg.interpolation_multiplier,
-            "action_smoothing_alpha": cfg.action_smoothing_alpha,
-            "max_action_delta_deg": cfg.max_action_delta_deg,
-            "gripper_open_bias_deg": cfg.gripper_open_bias_deg,
-            "gripper_open_bias_threshold_deg": cfg.gripper_open_bias_threshold_deg,
-            "robot_type": getattr(cfg.robot, "type", None),
-            "robot_id": getattr(cfg.robot, "id", None),
-            "policy_device": str(cfg.policy.device),
-            "first_frame_path": str(first_frame_path),
-        }
-        logging.info("Rollout log will be written to %s", rollout_log_path)
+    stats_counts = _checkpoint_stats_counts(str(cfg.policy.pretrained_path))
 
     robot = make_robot_from_config(cfg.robot)
     listener = None
     try:
         robot.connect()
         listener, events = init_keyboard_listener()
+        home_positions = _capture_home_positions(robot)
+        logging.info("Home position captured (%d joints).", len(home_positions))
 
-        log_say(f"Running policy for {cfg.episode_time_s}s", cfg.play_sounds)
-        _deploy_loop(
-            robot=robot,
-            policy=policy,
-            preprocessor=preprocessor,
-            postprocessor=postprocessor,
-            ds_features=ds_features,
-            fps=cfg.fps,
-            episode_time_s=cfg.episode_time_s,
-            robot_observation_processor=robot_observation_processor,
-            robot_action_processor=robot_action_processor,
-            display_data=cfg.display_data,
-            events=events,
-            interpolator=interpolator,
-            single_task=cfg.task,
-            action_smoothing_alpha=cfg.action_smoothing_alpha,
-            max_action_delta_deg=cfg.max_action_delta_deg,
-            gripper_open_bias_deg=cfg.gripper_open_bias_deg,
-            gripper_open_bias_threshold_deg=cfg.gripper_open_bias_threshold_deg,
-            display_compressed_images=False,
-            rollout_log_path=rollout_log_path,
-            rollout_header=rollout_header,
-        )
-        log_say("Episode finished", cfg.play_sounds)
+        for rollout_idx in range(cfg.n_rollouts):
+            if cfg.n_rollouts > 1:
+                print(f"\n[eval3] Rollout {rollout_idx + 1}/{cfg.n_rollouts}")
+                if cfg.raw_task and cfg.raw_task != cfg.task:
+                    print(f"[eval3] Raw prompt:        {cfg.raw_task!r}")
+                    print(f"[eval3] Normalized prompt: {cfg.task!r}")
+                else:
+                    print(f"[eval3] Prompt: {cfg.task!r}")
+
+            rollout_log_path: Path | None = None
+            rollout_header: dict | None = None
+            if cfg.rollout_log_dir:
+                ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+                suffix = f"_{rollout_idx}" if cfg.n_rollouts > 1 else ""
+                rollout_log_path = Path(cfg.rollout_log_dir) / f"rollout_{ts}{suffix}.jsonl"
+                first_frame_path = rollout_log_path.with_suffix(".firstframe.png")
+                rollout_header = {
+                    "instruction": cfg.task,
+                    "raw_task": cfg.raw_task or cfg.task,
+                    "target_slot": cfg.target_slot,
+                    "rollout_index": rollout_idx,
+                    "n_rollouts": cfg.n_rollouts,
+                    "episode_time_s": cfg.episode_time_s,
+                    "fps": cfg.fps,
+                    "policy_path": str(cfg.policy.pretrained_path),
+                    "policy_sha": _policy_sha(str(cfg.policy.pretrained_path)),
+                    "checkpoint_stats_count": stats_counts,
+                    "dataset_repo_id": cfg.dataset_repo_id,
+                    "rename_map": cfg.rename_map,
+                    "interpolation_multiplier": cfg.interpolation_multiplier,
+                    "action_smoothing_alpha": cfg.action_smoothing_alpha,
+                    "max_action_delta_deg": cfg.max_action_delta_deg,
+                    "gripper_open_bias_deg": cfg.gripper_open_bias_deg,
+                    "gripper_open_bias_threshold_deg": cfg.gripper_open_bias_threshold_deg,
+                    "robot_type": getattr(cfg.robot, "type", None),
+                    "robot_id": getattr(cfg.robot, "id", None),
+                    "policy_device": str(cfg.policy.device),
+                    "first_frame_path": str(first_frame_path),
+                }
+                logging.info("Rollout log: %s", rollout_log_path)
+
+            log_say(f"Running policy for {cfg.episode_time_s}s", cfg.play_sounds)
+            _deploy_loop(
+                robot=robot,
+                policy=policy,
+                preprocessor=preprocessor,
+                postprocessor=postprocessor,
+                ds_features=ds_features,
+                fps=cfg.fps,
+                episode_time_s=cfg.episode_time_s,
+                robot_observation_processor=robot_observation_processor,
+                robot_action_processor=robot_action_processor,
+                display_data=cfg.display_data,
+                events=events,
+                interpolator=interpolator,
+                single_task=cfg.task,
+                action_smoothing_alpha=cfg.action_smoothing_alpha,
+                max_action_delta_deg=cfg.max_action_delta_deg,
+                gripper_open_bias_deg=cfg.gripper_open_bias_deg,
+                gripper_open_bias_threshold_deg=cfg.gripper_open_bias_threshold_deg,
+                display_compressed_images=False,
+                rollout_log_path=rollout_log_path,
+                rollout_header=rollout_header,
+            )
+            log_say("Episode finished", cfg.play_sounds)
+
+            if events.get("exit_early"):
+                events["exit_early"] = False
+                break
+
+            if cfg.go_home_after_rollout and rollout_idx + 1 < cfg.n_rollouts:
+                _go_home(robot, home_positions, duration_s=cfg.home_duration_s, fps=cfg.fps)
+
+        if cfg.go_home_after_rollout and home_positions:
+            _go_home(robot, home_positions, duration_s=cfg.home_duration_s, fps=cfg.fps)
     finally:
         if robot.is_connected:
             robot.disconnect()

@@ -37,6 +37,10 @@ from eval3_concat_patch import apply_concat_patch as _eval3_concat_apply  # noqa
 
 _eval3_concat_apply()
 
+from eval3_train_hub_patch import apply_hub_patch as _eval3_hub_apply  # noqa: E402
+
+_eval3_hub_apply()
+
 from lerobot.scripts.lerobot_train import main  # noqa: E402
 
 
