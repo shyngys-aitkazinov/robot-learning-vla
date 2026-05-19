@@ -225,3 +225,148 @@ Should report 250 episodes, ~133k frames, single task
 | Image key | `observation.images.front` (480×640×3 video) |
 | fps | 30 |
 | LeRobot codebase_version | `v3.0` |
+
+---
+
+# Scale-up to Pins top-N pool
+
+For a much larger training corpus that uses celebrity distractors from
+the Pins-Face-Recognition pool (top-30 / top-50 / full-105), use the
+**sibling generator** `tools/eval3_synth_pins_dataset_gen.py` (plus
+wrapper `scripts/run_eval3_synth_pins_dataset_gen.sh`). The TOY-only
+generator stays untouched — both tools share the compose pipeline,
+output schema, and HF push logic.
+
+## Sampling math (different from TOY)
+
+```
+For each (target_celeb, target_position):       # 90/150/315 such tuples
+  for each of N target_photos (N = max-photos-per-celeb, default 10):
+    for each of M distractor scenes (M = distractors-per-target-photo, default 50):
+      pick 2 random distractor celebs from the pool (excluding target)
+      pick 1 random photo for each (from their first N)
+      pick a random swap flag
+      -> yield one episode
+
+Total configs/dataset = N * M  (= 10 * 50 = 500 with defaults)
+```
+
+Every target_photo is GUARANTEED to appear exactly M times (full
+target-side coverage), each paired with a different random distractor
+scene. Distractor space per slot is C(N_pool-1, 2) × N × N × 2 (≈ 81k
+for top-30 with N=10), so M=50 samples are essentially all unique.
+
+## Pool projections
+
+| Pool | Celebs | Datasets | Eps total (M=50) | Frames | Disk (libx264) |
+|---|---|---|---|---|---|
+| Top-30 | 30 | 90 | 45,000 | ~22.4 M | ~128 GB |
+| Top-50 | 50 | 150 | 75,000 | ~37.3 M | ~213 GB |
+| Full Pins | 105 | 315 | 157,500 | ~78.3 M | ~447 GB |
+
+## Wall-time projections (per pool, with 1 worker per output dataset)
+
+| Pool | 18-core | 90-core |
+|---|---|---|
+| Top-30 (90 datasets) | ~25 min | ~5 min |
+| Top-50 (150 datasets) | ~42 min | ~8 min |
+| Full Pins (315 datasets) | ~88 min | ~17 min |
+
+(plus ~5-8 min sequential HF upload regardless of CPU count)
+
+## Recipes
+
+### Recipe A — Top-30 default
+
+```bash
+EVAL3_PINS_WORKERS=$(nproc) \
+EVAL3_PINS_PUSH_TO_HUB=1 \
+  ./scripts/run_eval3_synth_pins_dataset_gen.sh
+```
+
+Defaults: pool=top-30, all 30 celebs as targets, all 3 positions, N=10
+target photos, M=50 distractor scenes, suffix=`pins30`. Produces 90
+datasets named `dataset_v3_synth_pins30_<celeb>_<pos>_2`.
+
+### Recipe B — Top-50 (more visual variety, ~1.7x disk)
+
+```bash
+EVAL3_PINS_WORKERS=$(nproc) \
+EVAL3_PINS_PUSH_TO_HUB=1 \
+EVAL3_PINS_POOL_JSON=datasets/pins-face-recognition-top50.json \
+EVAL3_PINS_OUTPUT_SUFFIX=pins50 \
+  ./scripts/run_eval3_synth_pins_dataset_gen.sh
+```
+
+### Recipe C — Full Pins (105 celebs) with smaller vcodec
+
+```bash
+EVAL3_PINS_WORKERS=$(nproc) \
+EVAL3_PINS_PUSH_TO_HUB=1 \
+EVAL3_PINS_POOL_JSON=datasets/pins-face-recognition.json \
+EVAL3_PINS_OUTPUT_SUFFIX=pinsfull \
+EVAL3_PINS_VCODEC=libsvtav1 \
+  ./scripts/run_eval3_synth_pins_dataset_gen.sh
+```
+
+`libsvtav1` cuts disk by ~30% (full Pins drops from 447 to ~315 GB) at
+the cost of slightly slower decode at training time.
+
+### Recipe D — Subset for fast iteration
+
+```bash
+EVAL3_PINS_CELEBS=emma_stone,tom_cruise,zendaya \
+EVAL3_PINS_POSITIONS=left \
+EVAL3_PINS_DISTRACTORS_PER_TARGET=10 \
+EVAL3_PINS_OVERWRITE=1 \
+  ./scripts/run_eval3_synth_pins_dataset_gen.sh
+```
+
+3 celebs × 1 position × 10 distractor-scenes × 10 photos = 300 eps total.
+Useful for quick training smoke tests on a new model variant.
+
+## Wiring the 90+ EXTRA_REPOS into training
+
+The training script's `EVAL3_EXTRA_REPOS` env var takes a comma-list.
+With 90 names that's an ugly long string — generate it with a glob:
+
+```bash
+# After generation completes locally (before/after HF push doesn't matter):
+EXTRA=$(ls datasets/ | grep -E '^dataset_v3_synth_pins30_' | tr '\n' ',' | sed 's/,$//')
+echo "Discovered $(echo "$EXTRA" | tr ',' '\n' | wc -l) extra repos"
+
+# Then:
+EVAL3_EXTRA_REPOS="$EXTRA" ./scripts/run_eval3_smolvla_aug_train.sh
+```
+
+Or to cherry-pick a subset (e.g. exclude OOD names you're holding out):
+
+```bash
+EXTRA=$(ls datasets/ \
+  | grep -E '^dataset_v3_synth_pins30_' \
+  | grep -vE '_(taylor_swift|barack_obama|yann_lecun)_' \
+  | tr '\n' ',' | sed 's/,$//')
+EVAL3_EXTRA_REPOS="$EXTRA" ./scripts/run_eval3_smolvla_aug_train.sh
+```
+
+## Per-celeb name reference
+
+The Pins celebs differ from TOY (no Taylor Swift / Yann LeCun / Barack
+Obama). List them with:
+
+```bash
+python3 -c "
+import json
+m = json.load(open('datasets/pins-face-recognition-top30.json'))
+for c in sorted(m['celebrities'], key=lambda x: x['slug']):
+    print(f\"  {c['slug']:<25s} {c['name']}\")"
+```
+
+## Pins-specific troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `--target-celebs include slugs not in pool` | Use a slug from the active pool. List slugs with the snippet above. Common mistake: using `taylor_swift` (TOY-only) on the Pins pool. |
+| Dataset generated but task augmenter doesn't add "the X" variant for Pins celebs | Expected: `KNOWN_CELEBRITIES` in `scripts/eval3_dataset_prep.py` only has the 3 TOY celebs. Pins celebs pass through canonically (no corruption). |
+| OOM at 90 workers | Drop to `EVAL3_PINS_WORKERS=64`. Each worker peaks at ~500 MB; 90×500=45 GB. |
+| Want to subset by celeb at training time | Per-celeb naming makes this trivial — glob filter in the `EXTRA` snippet above. |
