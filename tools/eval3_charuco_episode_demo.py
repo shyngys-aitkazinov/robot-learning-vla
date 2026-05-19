@@ -618,22 +618,24 @@ def _apply_table_blend(
     saturation: float = 0.75,
     blur_kernel: int = 3,
     noise_sigma: float = 5.0,
+    warmth: float = 1.0,
     rng: np.random.Generator | None = None,
 ) -> np.ndarray:
     """Apply printer + camera distortions so the warped celeb blends with the table.
 
-    Measured from this rig's recordings of the printed ChArUco boards:
-      - The contrast compresses from [0, 255] digital to ~[40, 193] captured
-        (linear ~0.6x scale with +40 offset on each channel).
-      - Saturation drops ~25-30% on the printed-on-paper green chroma.
-      - Ambient sensor noise + lighting gradient yield pixel std ~5-8 in
-        nominally-uniform regions.
-      - Slight focus blur (~1 px) from camera depth-of-field.
-
-    Defaults reproduce that distortion profile. All knobs are exposed as
-    --blend-* CLI flags so the user can iterate.
+    ``warmth`` is a per-channel gain that biases color temperature: ``warmth>1.0``
+    boosts R and attenuates B by the same factor (tungsten/warm-LED tint),
+    ``warmth<1.0`` does the opposite (cool/daylight tint). Applied multiplicatively
+    BEFORE contrast/offset so it shifts the white-balance baseline rather than
+    just rescaling output. 1.0 = no change (BGR neutral).
     """
     out = img.astype(np.float32)
+
+    # 0) Warmth: per-channel gain for white-balance shift.
+    if warmth != 1.0:
+        out[..., 0] *= (2.0 - warmth)  # B
+        out[..., 2] *= warmth          # R
+        out = np.clip(out, 0, 255)
 
     # 1) Brightness + contrast: compress dynamic range to match the captured rig.
     out = out * contrast + brightness_offset
@@ -657,6 +659,37 @@ def _apply_table_blend(
         noise = rng.normal(0.0, noise_sigma, size=out.shape).astype(np.float32)
         out = out + noise
 
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
+def _apply_global_lift(
+    frame_bgr: np.ndarray,
+    gain: float = 1.25,
+    offset: float = 10.0,
+    warmth: float = 1.06,
+) -> np.ndarray:
+    """Global brightness + warmth shift applied to a FULL composite frame.
+
+    Compensates for the lighting/camera distribution shift between the
+    captured training recordings (dimmer table, neutral WB) and the eval-time
+    camera+rig (brighter warm-LED illumination). Empirically tuned against
+    image.png (real eval-day camera shot):
+
+        captured-training mid-tone table  ~155
+        eval-time camera   mid-tone table  ~185
+        ratio                              ~1.20  -> gain=1.25 + offset=10
+        eval-time WB shift                 R/G ~1.06, B/G ~0.97 -> warmth=1.06
+
+    Applied to the FULL frame (table + warped prints + can) so the per-tile
+    blend and the surrounding scene stay color-consistent rather than the
+    prints being bright on a dark table.
+    """
+    out = frame_bgr.astype(np.float32)
+    if warmth != 1.0:
+        out[..., 0] *= (2.0 - warmth)  # B
+        out[..., 2] *= warmth          # R
+        out = np.clip(out, 0, 255)
+    out = out * gain + offset
     return np.clip(out, 0, 255).astype(np.uint8)
 
 
@@ -886,16 +919,37 @@ def main() -> None:
     ap.add_argument("--blend", action=argparse.BooleanOptionalAction, default=True,
                     help="Apply brightness/contrast/saturation/blur/noise to celeb images "
                          "so they match the captured-on-table look (default: on; --no-blend to disable).")
-    ap.add_argument("--blend-contrast", type=float, default=0.6,
-                    help="Linear contrast multiplier (default 0.6 — compresses [0,255]->[~40,~193]).")
-    ap.add_argument("--blend-brightness-offset", type=int, default=40,
-                    help="Additive offset after contrast scaling (default 40 = measured black-lift).")
-    ap.add_argument("--blend-saturation", type=float, default=0.75,
-                    help="HSV S-channel multiplier (default 0.75 = ~25%% desaturation).")
+    # Per-tile blend defaults: light corrections only, since the GLOBAL lift
+    # (below) handles the captured-training -> eval-camera brightness gap.
+    # Old defaults (contrast=0.6, offset=40) double-darkened when combined
+    # with global-lift; new defaults are tuned to match real eval prints.
+    ap.add_argument("--blend-contrast", type=float, default=0.88,
+                    help="Linear contrast multiplier on per-tile celeb image (default 0.88).")
+    ap.add_argument("--blend-brightness-offset", type=int, default=15,
+                    help="Additive offset after contrast on per-tile celeb image (default 15).")
+    ap.add_argument("--blend-saturation", type=float, default=0.9,
+                    help="HSV S-channel multiplier on per-tile celeb image (default 0.9).")
     ap.add_argument("--blend-blur-kernel", type=int, default=3,
-                    help="Gaussian blur kernel size, must be odd >=3 (default 3, set 1 to disable).")
-    ap.add_argument("--blend-noise-sigma", type=float, default=5.0,
-                    help="Per-pixel Gaussian noise stddev added after blur (default 5.0).")
+                    help="Gaussian blur kernel size on per-tile celeb image, odd >=3 (default 3, set 1 to disable).")
+    ap.add_argument("--blend-noise-sigma", type=float, default=3.0,
+                    help="Per-pixel Gaussian noise stddev on per-tile celeb image (default 3.0).")
+    ap.add_argument("--blend-warmth", type=float, default=1.0,
+                    help="White-balance shift (>1.0 = warm/tungsten, <1.0 = cool/daylight). "
+                         "1.0 = neutral. Typical 1.05-1.10 to match warm-LED eval room.")
+    # Global per-frame lift — applied to the FULL composite (table + prints + can)
+    # to bridge the captured-training -> eval-camera distribution gap.
+    ap.add_argument("--global-lift", action=argparse.BooleanOptionalAction, default=True,
+                    help="Apply global brightness/warmth lift to the full composite frame "
+                         "so the dark training-recording table matches the brighter eval "
+                         "camera (default: on; --no-global-lift to disable).")
+    ap.add_argument("--global-lift-gain", type=float, default=1.25,
+                    help="Per-channel gain in the global lift (default 1.25 — measured "
+                         "training-table mean 155 -> eval-table mean 185, ratio ~1.2x).")
+    ap.add_argument("--global-lift-offset", type=float, default=10.0,
+                    help="Additive offset after global gain (default 10.0).")
+    ap.add_argument("--global-lift-warmth", type=float, default=1.06,
+                    help="Warmth multiplier in the global lift (default 1.06 — matches "
+                         "the warm-LED tint in image.png reference).")
     ap.add_argument("--can-mask-strategies", type=str,
                     default="red_hsv,chroma_only,chroma_dilate_up,grabcut,tracker",
                     help="Comma-separated list of can-mask strategies to run. One MP4 per "
@@ -985,6 +1039,7 @@ def main() -> None:
                 saturation=args.blend_saturation,
                 blur_kernel=args.blend_blur_kernel,
                 noise_sigma=args.blend_noise_sigma,
+                warmth=args.blend_warmth,
                 rng=blend_rng,
             )
         targets.append(resized)
@@ -1060,6 +1115,13 @@ def main() -> None:
                 tuple(args.hsv_lo), tuple(args.hsv_hi),
                 masker=masker,
             )
+            if args.global_lift:
+                composed = _apply_global_lift(
+                    composed,
+                    gain=args.global_lift_gain,
+                    offset=args.global_lift_offset,
+                    warmth=args.global_lift_warmth,
+                )
             writer.write(composed)
             if not saved_first:
                 cv2.imwrite(str(out_png), composed)
