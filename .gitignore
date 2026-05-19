@@ -35,6 +35,9 @@ datasets/*
 !datasets/in-distribution-eval-3.json
 !datasets/in-distribution-eval-3/
 !datasets/in-distribution-eval-3/**
+!datasets/out-distribution-eval-3.json
+!datasets/out-distribution-eval-3/
+!datasets/out-distribution-eval-3/**
 
 # OS
 .DS_Store

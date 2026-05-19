@@ -1,0 +1,166 @@
+{
+  "dataset": "Eval 3 Out-of-Distribution (OOD) — Wikimedia Commons celebrity portraits",
+  "source": "Web-collected portrait-style photos of the three TOY identities (Taylor Swift, Barack Obama, Yann LeCun). Sourced from Wikimedia Commons under CC-BY / CC-BY-SA / Public-Domain licenses (Senate, Obama-Biden Transition, White House, EPFL, Ecole Polytechnique, iHeartRadio, Glenn Francis/Toglenn, Cosmopolitan UK, Flickr/burningkarma). Selected for variety across events/years; post-processed to portrait orientation, long edge ~2100 px, JPG q90 — matching the in-dist set.",
+  "source_url": "https://commons.wikimedia.org/",
+  "source_json": null,
+  "root": "datasets/out-distribution-eval-3",
+  "generated_at": "2026-05-19T00:07:12+00:00",
+  "total_celebrities": 3,
+  "total_images": 15,
+  "total_bytes": 7483020,
+  "category_counts": null,
+  "selection_rationale": "Same three identities as the in-distribution TOY pool but sourced from the open web rather than the course PDF. Each celebrity has 5 photos from distinct shoots (different events, years, outfits, settings) to ensure variety. Face-detection shoulder-capped crops are applied to landscape sources so the framing matches the in-dist head-and-shoulders editorial style.",
+  "held_out_identities_target": [
+    "Barack Obama",
+    "Taylor Swift",
+    "Yann LeCun"
+  ],
+  "held_out_identities_present": [
+    "Barack Obama",
+    "Taylor Swift",
+    "Yann LeCun"
+  ],
+  "name_overrides_applied": null,
+  "celebrities": [
+    {
+      "name": "Taylor Swift",
+      "slug": "taylor_swift",
+      "dir": "datasets/out-distribution-eval-3/taylor_swift",
+      "n_images": 5,
+      "total_bytes": 1989214,
+      "held_out": true,
+      "aspect_counts": {
+        "portrait": 5,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 2100,
+        "median": 2100,
+        "max": 2100
+      },
+      "rank": null,
+      "category": null
+    },
+    {
+      "name": "Barack Obama",
+      "slug": "barack_obama",
+      "dir": "datasets/out-distribution-eval-3/barack_obama",
+      "n_images": 5,
+      "total_bytes": 2258988,
+      "held_out": true,
+      "aspect_counts": {
+        "portrait": 5,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 2100,
+        "median": 2100,
+        "max": 2100
+      },
+      "rank": null,
+      "category": null
+    },
+    {
+      "name": "Yann LeCun",
+      "slug": "yann_lecun",
+      "dir": "datasets/out-distribution-eval-3/yann_lecun",
+      "n_images": 5,
+      "total_bytes": 3234818,
+      "held_out": true,
+      "aspect_counts": {
+        "portrait": 5,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 2100,
+        "median": 2100,
+        "max": 2100
+      },
+      "rank": null,
+      "category": null
+    }
+  ],
+  "image_sources": {
+    "yann_lecun/yann_lecun_01.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/File:Yann_LeCun_-_2025_(cropped).jpg",
+      "license": "CC BY-SA 2.0",
+      "author": "Ecole polytechnique"
+    },
+    "yann_lecun/yann_lecun_02.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/File:Laura_Chaubard_%26_Yann_Le_Cun_-_2024_(53814052697)_(cropped).jpg",
+      "license": "CC BY-SA 2.0",
+      "author": "Jeremy Barande / Ecole polytechnique"
+    },
+    "yann_lecun/yann_lecun_03.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/File:Yann_LeCun_-_2018_(cropped).jpg",
+      "license": "CC BY-SA 2.0",
+      "author": "Jeremy Barande / Ecole polytechnique"
+    },
+    "yann_lecun/yann_lecun_04.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/File:Yann_Lecun_during_a_conference_at_EPFL,_Lausanne,_5_october_2018.jpg",
+      "license": "CC BY 4.0",
+      "author": "Alain Herzog / EPFL"
+    },
+    "yann_lecun/yann_lecun_05.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/File:Yann_LeCun_(41208595340).jpg",
+      "license": "CC BY-SA 2.0",
+      "author": "Jeremy Barande / Ecole polytechnique"
+    },
+    "barack_obama/barack_obama_01.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/File:Official_portrait_of_Barack_Obama.jpg",
+      "license": "CC BY 3.0",
+      "author": "Pete Souza / Obama-Biden Transition"
+    },
+    "barack_obama/barack_obama_02.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/File:Barack_Obama_2012_(4x5).png",
+      "license": "Public domain",
+      "author": "Official White House Photo by Pete Souza"
+    },
+    "barack_obama/barack_obama_03.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/File:Obama_Portrait_2006.jpg",
+      "license": "CC BY-SA 3.0",
+      "author": "Ari Levinson (Autumnfire)"
+    },
+    "barack_obama/barack_obama_04.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/File:Barack_Obama_Senate_portrait_crop.jpg",
+      "license": "Public domain",
+      "author": "United States Senate"
+    },
+    "barack_obama/barack_obama_05.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/File:President-elect_Barack_Obama,_headshot.jpg",
+      "license": "CC BY 3.0",
+      "author": "Obama-Biden Transition project"
+    },
+    "taylor_swift/taylor_swift_01.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/File:Taylor_Swift_2024_(cropped).jpg",
+      "license": "CC BY 3.0",
+      "author": "iHeartRadioCA"
+    },
+    "taylor_swift/taylor_swift_02.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/File:Taylor_Swift_2019_by_Glenn_Francis_(cropped_3x4).jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "Glenn Francis (Toglenn)"
+    },
+    "taylor_swift/taylor_swift_03.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/File:Taylor_Swift,_being_interviewed_(4535293952).jpg",
+      "license": "CC BY 2.0",
+      "author": "burningkarma (Flickr)"
+    },
+    "taylor_swift/taylor_swift_04.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/File:Taylor_Swift_at_the_2023_MTV_Video_Music_Awards_(1).png",
+      "license": "CC BY 3.0",
+      "author": "iHeartRadioCA"
+    },
+    "taylor_swift/taylor_swift_05.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/File:191125_Taylor_Swift_at_the_2019_American_Music_Awards_(cropped).png",
+      "license": "CC BY 3.0",
+      "author": "Cosmopolitan UK"
+    }
+  }
+}

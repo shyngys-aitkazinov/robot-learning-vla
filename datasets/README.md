@@ -28,6 +28,8 @@ Two reasons to materialize datasets here instead of working from
 | `pins-face-recognition.json`   | generated from the above by [`tools/build_pins_metadata.py`](../tools/build_pins_metadata.py) | 50 KB (committed) | Per-celebrity metadata index: canonical names, dir paths, image counts, aspect/resolution stats, TOY-holdout flags |
 | `pins-face-recognition-top30.json` | curated subset of the above, ranked by global recognizability, built by [`tools/build_pins_top30.py`](../tools/build_pins_top30.py) | 16 KB (committed) | Top-30 OOD-eligible celebrities — adds `rank` (1–30) and `category` (actor/athlete/tech/music) fields, excludes held-out TOY identities |
 | `pins-face-recognition-top50.json` | extended subset (ranks 1–50, identical 1–30 prefix), built by [`tools/build_pins_top50.py`](../tools/build_pins_top50.py) | 27 KB (committed) | Top-50 OOD-eligible celebrities — adds 20 more globally-recognizable names (GoT principals, MCU secondaries, current music acts, A-list veterans) for richer OOD diversity |
+| `in-distribution-eval-3/` + `.json` | rendered from the course-provided `in-distribution-eval-3.pdf` at 300 DPI | 7 MB / 15 images / 3 TOY celebrities (5 each) | TOY in-distribution celebrity portraits used for Eval 3 runs 1–6 |
+| `out-distribution-eval-3/` + `.json` | curated from [Wikimedia Commons](https://commons.wikimedia.org/) (CC-BY / CC-BY-SA / PD), portrait-cropped + resized to long-edge 2100 px JPG q90 | 7 MB / 15 images / 3 TOY celebrities (5 each) | OOD held-out celebrity portraits (same 3 identities, different shoots) for held-out scoring. Per-image attribution in the JSON's `image_sources` block |
 
 Total ≈ 730 MB on disk.
 
