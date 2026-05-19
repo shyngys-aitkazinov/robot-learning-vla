@@ -160,9 +160,53 @@ Do not connect motors to FlowerVLA/OpenVLA outputs until offline checks pass:
   first action chunk
 - first 3 seconds at `motion_gain=0.25` are stable before any full rollout
 
-FlowerVLA checkpoints are not native LeRobot `PreTrainedPolicy` checkpoints, so
-use the dedicated adapter instead of `scripts/eval3_vla_deploy.py`. On the robot
-machine, first verify the checkpoint loads without touching motors:
+FlowerVLA and OpenVLA LoRA checkpoints are not native LeRobot `PreTrainedPolicy`
+checkpoints, so use the dedicated adapters instead of `scripts/eval3_vla_deploy.py`.
+
+### OpenVLA deploy
+
+On the robot machine (OpenVLA venv active), dry-run load:
+
+```bash
+source .venv_openvla_train/bin/activate
+OPENVLA_SRC=external/openvla ./scripts/run_eval3_openvla_deploy.sh \
+  --robot.type=so101_follower \
+  --robot.port=<follower_tty> \
+  --robot.id=my_awesome_follower_arm \
+  --robot.cameras='{front: {type: opencv, index_or_path: <cam_idx>, width: 640, height: 480, fps: 30}}' \
+  --checkpoint_path=outputs/train/eval3-openvla-lora-new66-50k/checkpoints/040000 \
+  --openvla_src=external/openvla \
+  --task="Place the coke on Taylor Swift" \
+  --dry_run=true
+```
+
+Guarded 3-second motor test:
+
+```bash
+OPENVLA_SRC=external/openvla ./scripts/run_eval3_openvla_deploy.sh \
+  --robot.type=so101_follower \
+  --robot.port=<follower_tty> \
+  --robot.id=my_awesome_follower_arm \
+  --robot.cameras='{front: {type: opencv, index_or_path: <cam_idx>, width: 640, height: 480, fps: 30}}' \
+  --checkpoint_path=outputs/train/eval3-openvla-lora-new66-50k/checkpoints/050000 \
+  --openvla_src=external/openvla \
+  --task="Place the coke on Taylor Swift" \
+  --episode_time_s=3 \
+  --fps=5 \
+  --motion_gain=0.25 \
+  --action_smoothing_alpha=0.35 \
+  --max_action_delta_deg=4 \
+  --allow_live_motors=true
+```
+
+Use `unnorm_key=eval3_so101_new66` from the checkpoint’s `dataset_statistics.json` (loaded
+automatically). Hub checkpoint example:
+
+`--checkpoint_path=RobotLearningVLA/eval3-openvla-lora-new66-50k`
+
+### FlowerVLA deploy
+
+On the robot machine, first verify the checkpoint loads without touching motors:
 
 ```bash
 python scripts/eval3_flower_deploy.py \

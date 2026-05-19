@@ -99,70 +99,100 @@ def render_preview(frame: np.ndarray, masks: dict[str, np.ndarray], out_path: Pa
     out.save(out_path)
 
 
+def export_masks_for_target(
+    *,
+    slug: str,
+    cfg: dict,
+    out_root: Path,
+    target_pos: str,
+    header_suffix: str = "",
+) -> None:
+    """Write bg/target/other masks for one target print position."""
+    frame = np.array(Image.open(cfg["sample_frame"]).convert("RGB"))
+    h, w = frame.shape[:2]
+    prints_masks = {pos: polygon_to_mask(poly, (h, w)) for pos, poly in cfg["prints"].items()}
+    table_full = polygon_to_mask(cfg["table_polygon"], (h, w))
+    any_print = np.zeros_like(table_full)
+    for m in prints_masks.values():
+        any_print |= m
+    table_only = table_full & ~any_print
+    bg_mask = ~table_full
+
+    target_mask = prints_masks[target_pos]
+    other_positions = [p for p in ("left", "middle", "right") if p != target_pos]
+    other1_mask = prints_masks[other_positions[0]]
+    other2_mask = prints_masks[other_positions[1]]
+
+    ds_dir = out_root / slug
+    ds_dir.mkdir(parents=True, exist_ok=True)
+    np.save(ds_dir / "bg_mask.npy", bg_mask)
+    np.save(ds_dir / "target_mask.npy", target_mask)
+    np.save(ds_dir / "other1_mask.npy", other1_mask)
+    np.save(ds_dir / "other2_mask.npy", other2_mask)
+
+    render_preview(
+        frame,
+        {
+            "background": bg_mask,
+            "table": table_only,
+            "target": target_mask,
+            "other1": other1_mask,
+            "other2": other2_mask,
+        },
+        ds_dir / "preview.png",
+        header=f"{slug}  target={target_pos}{header_suffix}",
+    )
+
+    meta = {
+        "slug": slug,
+        "sample_frame": cfg["sample_frame"],
+        "image_shape_hw": [h, w],
+        "table_polygon": cfg["table_polygon"],
+        "prints": cfg["prints"],
+        "target_position": target_pos,
+        "other_positions": other_positions,
+        "bg_mask_pixels": int(bg_mask.sum()),
+        "target_mask_pixels": int(target_mask.sum()),
+        "other1_mask_pixels": int(other1_mask.sum()),
+        "other2_mask_pixels": int(other2_mask.sum()),
+    }
+    with open(ds_dir / "meta.json", "w") as f:
+        json.dump(meta, f, indent=2)
+
+    print(f"\n[{slug}]  target={target_pos}  -> {ds_dir}")
+    print(f"  other1 ({other_positions[0]:>6}): {other1_mask.sum():>7d} px")
+    print(f"  other2 ({other_positions[1]:>6}): {other2_mask.sum():>7d} px")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out-dir", default="outputs/eval3_masks")
+    ap.add_argument(
+        "--slot-masks",
+        action="store_true",
+        help="Also emit slot_left/slot_middle/slot_right masks for dataset_v2_* "
+        "(shared print geometry from the swift preset; target slot varies).",
+    )
     args = ap.parse_args()
     out_root = Path(args.out_dir)
     out_root.mkdir(parents=True, exist_ok=True)
 
     for slug, cfg in PRESETS.items():
-        frame = np.array(Image.open(cfg["sample_frame"]).convert("RGB"))
-        h, w = frame.shape[:2]
-        print(f"\n[{slug}]  sample {cfg['sample_frame']}  shape={h}x{w}  target={cfg['target']}")
-
-        # Build per-position masks
-        prints_masks = {pos: polygon_to_mask(poly, (h, w)) for pos, poly in cfg["prints"].items()}
-        # Table mask EXCLUDES the print regions; bg = outside table
-        table_full = polygon_to_mask(cfg["table_polygon"], (h, w))
-        any_print = np.zeros_like(table_full)
-        for m in prints_masks.values():
-            any_print |= m
-        table_only = table_full & ~any_print
-        bg_mask = ~table_full
-
-        # Identify target + the other two
         target_pos = cfg["target"]
-        target_mask = prints_masks[target_pos]
-        other_positions = [p for p in ("left", "middle", "right") if p != target_pos]
-        other1_mask = prints_masks[other_positions[0]]
-        other2_mask = prints_masks[other_positions[1]]
+        print(f"\n[{slug}]  sample {cfg['sample_frame']}  target={target_pos}")
+        export_masks_for_target(slug=slug, cfg=cfg, out_root=out_root, target_pos=target_pos)
 
-        ds_dir = out_root / slug
-        ds_dir.mkdir(parents=True, exist_ok=True)
-        np.save(ds_dir / "bg_mask.npy",     bg_mask)
-        np.save(ds_dir / "target_mask.npy", target_mask)
-        np.save(ds_dir / "other1_mask.npy", other1_mask)
-        np.save(ds_dir / "other2_mask.npy", other2_mask)
-
-        render_preview(
-            frame,
-            {"background": bg_mask, "table": table_only, "target": target_mask, "other1": other1_mask, "other2": other2_mask},
-            ds_dir / "preview.png",
-            header=f"{slug}  target={target_pos}",
-        )
-
-        meta = {
-            "slug": slug,
-            "sample_frame": cfg["sample_frame"],
-            "image_shape_hw": [h, w],
-            "table_polygon": cfg["table_polygon"],
-            "prints": cfg["prints"],
-            "target_position": target_pos,
-            "other_positions": other_positions,
-            "bg_mask_pixels": int(bg_mask.sum()),
-            "target_mask_pixels": int(target_mask.sum()),
-            "other1_mask_pixels": int(other1_mask.sum()),
-            "other2_mask_pixels": int(other2_mask.sum()),
-        }
-        with open(ds_dir / "meta.json", "w") as f:
-            json.dump(meta, f, indent=2)
-
-        print(f"  bg_mask:     {bg_mask.sum():>7d} px ({bg_mask.mean()*100:.1f}%)")
-        print(f"  target ({target_pos:>6}): {target_mask.sum():>7d} px")
-        print(f"  other1 ({other_positions[0]:>6}): {other1_mask.sum():>7d} px")
-        print(f"  other2 ({other_positions[1]:>6}): {other2_mask.sum():>7d} px")
-        print(f"  preview ->  {ds_dir / 'preview.png'}")
+    if args.slot_masks:
+        # dataset_v2_* uses the same camera rig; only the target board slot changes.
+        v2_geometry = PRESETS["swift"]
+        for slot in ("left", "middle", "right"):
+            export_masks_for_target(
+                slug=f"slot_{slot}",
+                cfg=v2_geometry,
+                out_root=out_root,
+                target_pos=slot,
+                header_suffix="  (v2 shared geometry)",
+            )
 
     print("\nDone. Inspect each preview.png and adjust PRESETS in this file if a polygon is wrong.")
     return 0

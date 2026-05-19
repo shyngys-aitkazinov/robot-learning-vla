@@ -45,6 +45,8 @@ Use **`scripts/predict.py`** with explicit **`--unnorm-key`** only after reading
 | [`scripts/predict.py`](scripts/predict.py) | Single image → raw action tensor |
 | [`scripts/capture_infer.py`](scripts/capture_infer.py) | Same as predict with Eval3-oriented CLI defaults |
 | [`scripts/deploy_stub.py`](scripts/deploy_stub.py) | Timing-only loop over PNG folder → JSONL (no motors) |
+| [`../../scripts/eval3_openvla_deploy.py`](../../scripts/eval3_openvla_deploy.py) | **Eval3 LoRA** closed-loop on SO-101 (dry-run + guarded live) |
+| [`../../scripts/run_eval3_openvla_deploy.sh`](../../scripts/run_eval3_openvla_deploy.sh) | Wrapper that activates `.venv_openvla_train` |
 | [`scripts/offline_probe.py`](scripts/offline_probe.py) | Variance across prompts on many images (manifest / glob) |
 | [`scripts/http_client.py`](scripts/http_client.py) | Optional REST client for upstream `vla-scripts/deploy.py` |
 | [`scripts/train_eval3_lora.py`](scripts/train_eval3_lora.py) | Eval3 exact-data LoRA trainer for runs 7O/8O |

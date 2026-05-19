@@ -44,6 +44,10 @@ from eval3_smolvla_aux_head import apply as _eval3_aux_head_apply  # noqa: E402
 
 _eval3_aux_head_apply()
 
+from eval3_train_hub_patch import apply_hub_patch as _eval3_hub_apply  # noqa: E402
+
+_eval3_hub_apply()
+
 from lerobot.scripts.lerobot_train import main  # noqa: E402
 
 
