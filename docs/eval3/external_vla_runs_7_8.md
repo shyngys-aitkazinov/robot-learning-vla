@@ -159,3 +159,40 @@ Do not connect motors to FlowerVLA/OpenVLA outputs until offline checks pass:
 - same image with Taylor Swift / Yann LeCun / Barack Obama prompts changes the
   first action chunk
 - first 3 seconds at `motion_gain=0.25` are stable before any full rollout
+
+FlowerVLA checkpoints are not native LeRobot `PreTrainedPolicy` checkpoints, so
+use the dedicated adapter instead of `scripts/eval3_vla_deploy.py`. On the robot
+machine, first verify the checkpoint loads without touching motors:
+
+```bash
+python scripts/eval3_flower_deploy.py \
+  --robot.type=so101_follower \
+  --robot.port=<follower_tty> \
+  --robot.id=my_awesome_follower_arm \
+  --robot.cameras='{front: {type: opencv, index_or_path: <cam_idx>, width: 640, height: 480, fps: 30}}' \
+  --checkpoint_path=RobotLearningVLA/eval3-flower-new66-50k \
+  --flower_src=external/flower_vla_calvin \
+  --task="Place the coke on Taylor Swift" \
+  --device=auto \
+  --dry_run=true
+```
+
+If the dry run passes, run a guarded 3-second motor test:
+
+```bash
+python scripts/eval3_flower_deploy.py \
+  --robot.type=so101_follower \
+  --robot.port=<follower_tty> \
+  --robot.id=my_awesome_follower_arm \
+  --robot.cameras='{front: {type: opencv, index_or_path: <cam_idx>, width: 640, height: 480, fps: 30}}' \
+  --checkpoint_path=RobotLearningVLA/eval3-flower-new66-50k \
+  --flower_src=external/flower_vla_calvin \
+  --task="Place the coke on Taylor Swift" \
+  --device=auto \
+  --episode_time_s=3 \
+  --fps=5 \
+  --motion_gain=0.25 \
+  --action_smoothing_alpha=0.35 \
+  --max_action_delta_deg=4 \
+  --allow_live_motors=true
+```
