@@ -1,15 +1,15 @@
 {
   "dataset": "Eval 3 Out-of-Distribution (OOD) — Wikimedia Commons celebrity portraits",
-  "source": "Web-collected portrait-style photos of the three TOY identities (Taylor Swift, Barack Obama, Yann LeCun). Sourced from Wikimedia Commons under CC-BY / CC-BY-SA / Public-Domain licenses (Senate, Obama-Biden Transition, White House, EPFL, Ecole Polytechnique, iHeartRadio, Glenn Francis/Toglenn, Cosmopolitan UK, Flickr/burningkarma). Selected for variety across events/years; post-processed to portrait orientation, long edge ~2100 px, JPG q90 — matching the in-dist set.",
+  "source": "Web-collected portrait-style photos of the three TOY identities. Sourced from Wikimedia Commons under CC-BY / CC-BY-SA / Public-Domain licenses (Senate, Obama-Biden Transition, White House, EPFL, Ecole Polytechnique, iHeartRadio, Glenn Francis/Toglenn, Cosmopolitan UK, Marcin Wichary). Selected for variety across events/years; face-detection-guided tight portrait crops applied so the face dominates the frame (face ~50% of crop height) with only minimal shoulder visible — matches the in-distribution editorial style.",
   "source_url": "https://commons.wikimedia.org/",
   "source_json": null,
   "root": "datasets/out-distribution-eval-3",
-  "generated_at": "2026-05-19T00:07:12+00:00",
+  "generated_at": "2026-05-19T00:18:20+00:00",
   "total_celebrities": 3,
   "total_images": 15,
-  "total_bytes": 7483020,
+  "total_bytes": 7225534,
   "category_counts": null,
-  "selection_rationale": "Same three identities as the in-distribution TOY pool but sourced from the open web rather than the course PDF. Each celebrity has 5 photos from distinct shoots (different events, years, outfits, settings) to ensure variety. Face-detection shoulder-capped crops are applied to landscape sources so the framing matches the in-dist head-and-shoulders editorial style.",
+  "selection_rationale": "Each celebrity has 5 photos from distinct shoots (different events, years, outfits, or angles). Crops use the OpenCV Haar ALT2 cascade (with default fallback and manual rectangles for chin-up / off-center poses) so that the face occupies ~50% of the portrait height with the upper torso providing a shoulder strip — matching the framing of datasets/in-distribution-eval-3/.",
   "held_out_identities_target": [
     "Barack Obama",
     "Taylor Swift",
@@ -27,7 +27,7 @@
       "slug": "taylor_swift",
       "dir": "datasets/out-distribution-eval-3/taylor_swift",
       "n_images": 5,
-      "total_bytes": 1989214,
+      "total_bytes": 1779733,
       "held_out": true,
       "aspect_counts": {
         "portrait": 5,
@@ -48,7 +48,7 @@
       "slug": "barack_obama",
       "dir": "datasets/out-distribution-eval-3/barack_obama",
       "n_images": 5,
-      "total_bytes": 2258988,
+      "total_bytes": 2445557,
       "held_out": true,
       "aspect_counts": {
         "portrait": 5,
@@ -69,7 +69,7 @@
       "slug": "yann_lecun",
       "dir": "datasets/out-distribution-eval-3/yann_lecun",
       "n_images": 5,
-      "total_bytes": 3234818,
+      "total_bytes": 3000244,
       "held_out": true,
       "aspect_counts": {
         "portrait": 5,
@@ -88,9 +88,9 @@
   ],
   "image_sources": {
     "yann_lecun/yann_lecun_01.jpg": {
-      "source_url": "https://commons.wikimedia.org/wiki/File:Yann_LeCun_-_2025_(cropped).jpg",
+      "source_url": "https://commons.wikimedia.org/wiki/File:Conf%C3%A9rence_IP_Paris_%22AI,_Science_and_Society%22_%C3%A0_l%27Ecole_polytechnique_(54320377276).jpg",
       "license": "CC BY-SA 2.0",
-      "author": "Ecole polytechnique"
+      "author": "Ecole polytechnique (Paris)"
     },
     "yann_lecun/yann_lecun_02.jpg": {
       "source_url": "https://commons.wikimedia.org/wiki/File:Laura_Chaubard_%26_Yann_Le_Cun_-_2024_(53814052697)_(cropped).jpg",
@@ -108,7 +108,7 @@
       "author": "Alain Herzog / EPFL"
     },
     "yann_lecun/yann_lecun_05.jpg": {
-      "source_url": "https://commons.wikimedia.org/wiki/File:Yann_LeCun_(41208595340).jpg",
+      "source_url": "https://commons.wikimedia.org/wiki/File:Yann_LeCun_(29146901108).jpg",
       "license": "CC BY-SA 2.0",
       "author": "Jeremy Barande / Ecole polytechnique"
     },
@@ -148,9 +148,9 @@
       "author": "Glenn Francis (Toglenn)"
     },
     "taylor_swift/taylor_swift_03.jpg": {
-      "source_url": "https://commons.wikimedia.org/wiki/File:Taylor_Swift,_being_interviewed_(4535293952).jpg",
+      "source_url": "https://commons.wikimedia.org/wiki/File:Taylor_Swift_4,_2011.jpg",
       "license": "CC BY 2.0",
-      "author": "burningkarma (Flickr)"
+      "author": "Marcin Wichary"
     },
     "taylor_swift/taylor_swift_04.jpg": {
       "source_url": "https://commons.wikimedia.org/wiki/File:Taylor_Swift_at_the_2023_MTV_Video_Music_Awards_(1).png",
