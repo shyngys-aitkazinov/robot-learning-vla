@@ -503,6 +503,21 @@ def _deploy_loop(
 
             step_idx += 1
 
+            # Slot-bottleneck head readout — print the left/middle/right
+            # probabilities the prefix classifier produced this inference.
+            # `_last_slot_logits` is stashed by the patched embed_prefix every
+            # forward; absent for non-slot checkpoints (then slot_probs=None).
+            slot_probs = None
+            if is_record_frame:
+                _sl = getattr(policy.model, "_last_slot_logits", None)
+                if _sl is not None:
+                    slot_probs = torch.softmax(_sl[0].float(), dim=-1).tolist()
+                    _slot = ("LEFT", "MIDDLE", "RIGHT")[max(range(3), key=lambda i: slot_probs[i])]
+                    logging.info(
+                        "  [slot head] L %.2f  M %.2f  R %.2f  -> %s",
+                        slot_probs[0], slot_probs[1], slot_probs[2], _slot,
+                    )
+
             if display_data:
                 from lerobot.utils.visualization_utils import log_rerun_data
 
@@ -531,6 +546,7 @@ def _deploy_loop(
                             "policy_action_processed": policy_action_processed,
                             "policy_action_guarded": policy_action_guarded,
                             "sent_action": _float_mapping(robot_action_to_send),
+                            "slot_probs": slot_probs,
                             # Backward-compatible field consumed by older audit helpers.
                             "action": [float(robot_action_to_send[k]) for k in action_keys_out],
                         }
