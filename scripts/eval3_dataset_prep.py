@@ -1078,6 +1078,10 @@ class Eval3PrepDataset(Dataset):
         self._print_aug_fn = print_aug_fn
         self._state_aug_fn = state_aug_fn
         self._image_key = image_key
+        # v16 slot-bottleneck caches (populated at the end of __init__ when
+        # EVAL3_SLOT_FRAME0=1; stay empty otherwise and on prep-cache hits).
+        self._frame0_by_ep: dict[int, Any] = {}
+        self._grasp_offset_by_ep: dict[int, int] = {}
         # Auxiliary-head supervision label (0=left, 1=middle, 2=right, None=unknown
         # -> emit -100 = CrossEntropy ignore_index so old single-celeb datasets
         # like `taylor_swift_1` don't contribute aux gradient).
@@ -1266,6 +1270,46 @@ class Eval3PrepDataset(Dataset):
                 "meta_stats": self._meta.stats,
             })
 
+        # ----- v16 slot-bottleneck: frame-0 image + grasp detection --------
+        # Gated on EVAL3_SLOT_FRAME0=1. The slot classifier reads the
+        # episode's frame-0 (static, pre-motion) scene via the camera2 slot;
+        # the slot CE loss is counted only on pre-grasp frames.
+        if os.environ.get("EVAL3_SLOT_FRAME0", "0").strip() == "1":
+            try:
+                grasp_delta = float(os.environ.get("EVAL3_GRASP_GRIP_DELTA", "25"))
+            except ValueError:
+                grasp_delta = 25.0
+            state_col = dataset.hf_dataset["observation.state"]
+            for ep_idx, (f0, f1) in enumerate(zip(self._episode_from_idxs, self._episode_to_idxs)):
+                f0i, f1i = int(f0), int(f1)
+                ep_len = max(1, f1i - f0i)
+                try:
+                    self._frame0_by_ep[ep_idx] = self._ds[f0i][self._image_key]
+                except Exception as exc:
+                    logging.warning("eval3_prep: frame-0 cache miss ep %d (%s)", ep_idx, exc)
+                # grasp-complete = first frame the gripper has moved markedly
+                # from its home value (open->closed). Detecting the transition
+                # rather than an absolute level is convention-agnostic. Clamp
+                # the result to a sane pre-grasp window [15%, 50%] of the
+                # episode so a noisy / missing signal can't break it.
+                g0 = float(state_col[f0i][5])
+                grasp_off = None
+                for off in range(ep_len):
+                    if abs(float(state_col[f0i + off][5]) - g0) > grasp_delta:
+                        grasp_off = off
+                        break
+                if grasp_off is None:
+                    grasp_off = int(0.35 * ep_len)
+                grasp_off = max(int(0.15 * ep_len), min(grasp_off, int(0.50 * ep_len)))
+                self._grasp_offset_by_ep[ep_idx] = int(grasp_off)
+            _g = list(self._grasp_offset_by_ep.values())
+            logging.info(
+                "eval3_prep: v16 frame-0 mode — cached %d frame-0 images, "
+                "grasp offset median=%d (%s)",
+                len(self._frame0_by_ep),
+                int(np.median(_g)) if _g else -1, self._ds.repo_id,
+            )
+
     # ----- Trainer-required attributes ------------------------------------
 
     @property
@@ -1383,6 +1427,19 @@ class Eval3PrepDataset(Dataset):
             row = dict(row)
             mutated = True
         row["target_position"] = torch.as_tensor(self._target_position_idx, dtype=torch.long)
+        # v16: attach frame-0 image (-> camera2 via rename_map) + pre-grasp flag.
+        if self._frame0_by_ep or self._grasp_offset_by_ep:
+            ep = int(self._episode_index_by_frame[int(original_idx)])
+            f0img = self._frame0_by_ep.get(ep)
+            if f0img is not None:
+                row["observation.images.front_frame0"] = f0img
+            grasp_off = self._grasp_offset_by_ep.get(ep)
+            if grasp_off is None:
+                is_pre = 1
+            else:
+                ep_start = self._episode_from_idxs[ep]
+                is_pre = 1 if (int(original_idx) - ep_start) <= grasp_off else 0
+            row["is_pregrasp"] = torch.as_tensor(int(is_pre), dtype=torch.long)
         return row
 
     # ----- Catch-all proxy --------------------------------------------------

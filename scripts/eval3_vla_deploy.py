@@ -103,9 +103,38 @@ def _detect_head(path: str | None) -> str:
     return "slot" if weight not in ("", "0", "0.0") else "aux"
 
 
+def _detect_frame0(path: str | None) -> bool:
+    """True if the checkpoint was trained with the v16 frame-0 slot mode — its
+    train_config.json rename_map carries an ``observation.images.*_frame0``
+    entry. The slot patch must then read the camera2 token slice at inference.
+    """
+    if not path:
+        return False
+    tc: Path | None = None
+    local = Path(path) / "train_config.json"
+    if local.is_file():
+        tc = local
+    elif "/" in path and not Path(path).exists():
+        try:
+            from huggingface_hub import hf_hub_download
+
+            tc = Path(hf_hub_download(path, "train_config.json"))
+        except Exception:
+            tc = None
+    if tc is not None and tc.is_file():
+        try:
+            return "_frame0" in tc.read_text(encoding="utf-8")
+        except Exception:
+            pass
+    return False
+
+
 _head = _detect_head(_policy_path_from_argv())
 if _head == "slot":
     os.environ.setdefault("EVAL3_SLOT_LOSS_WEIGHT", "0.5")  # so apply() installs the patch
+    if _detect_frame0(_policy_path_from_argv()):
+        os.environ["EVAL3_SLOT_FRAME0"] = "1"
+        logging.info("eval3_vla_deploy: v16 frame-0 checkpoint detected — EVAL3_SLOT_FRAME0=1")
     from eval3_smolvla_slot_bottleneck import apply as _eval3_slot_apply  # noqa: E402
 
     _eval3_slot_apply()
@@ -404,6 +433,7 @@ def _deploy_loop(
 
     step_idx = 0
     timestamp = 0.0
+    frame0_obs_img = None  # v16: episode frame-0 scene, fed as the camera2 input
     start_episode_t = time.perf_counter()
     try:
         while timestamp < episode_time_s:
@@ -430,6 +460,18 @@ def _deploy_loop(
             obs_processed = robot_observation_processor(obs)
 
             observation_frame = build_dataset_frame(ds_features, obs_processed, prefix=OBS_STR)
+            # v16 slot-bottleneck: the slot classifier reads the episode's
+            # frame-0 scene via the camera2 slot. Capture it on the first tick
+            # and feed it every step. rename_map routes
+            # observation.images.front_frame0 -> observation.images.camera2;
+            # for non-v16 checkpoints the extra key is simply unused.
+            if step_idx == 0:
+                for _ik, _iv in observation_frame.items():
+                    if "image" in _ik and _iv is not None:
+                        frame0_obs_img = _iv.copy() if hasattr(_iv, "copy") else _iv
+                        break
+            if frame0_obs_img is not None:
+                observation_frame["observation.images.front_frame0"] = frame0_obs_img
             is_record_frame = True
             policy_action_raw = None
             policy_action_processed = None

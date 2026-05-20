@@ -93,6 +93,10 @@ def apply() -> None:
     dropout = _env_float("EVAL3_SLOT_DROPOUT", 0.1)
     stopgrad = _env_bool("EVAL3_SLOT_STOPGRAD", True)
     gumbel = _env_bool("EVAL3_SLOT_GUMBEL", False)
+    # v16: read the slot classifier off the frame-0 image (camera2 slot), and
+    # count the slot CE loss only on pre-grasp frames.
+    frame0_mode = _env_bool("EVAL3_SLOT_FRAME0", False)
+    ce_pregrasp_only = _env_bool("EVAL3_SLOT_CE_PREGRASP_ONLY", False)
 
     # ---- the slot classifier module -------------------------------------
     class SlotClassifier(nn.Module):
@@ -168,6 +172,8 @@ def apply() -> None:
         extra = _orig_extract(batch)
         if "target_position" in batch:
             extra["target_position"] = batch["target_position"]
+        if "is_pregrasp" in batch:
+            extra["is_pregrasp"] = batch["is_pregrasp"]
         return extra
 
     _conv_mod._extract_complementary_data = _patched_extract
@@ -183,8 +189,10 @@ def apply() -> None:
         self._last_slot_logits = None
         logging.info(
             "[eval3_slot_bottleneck] installed SlotClassifier "
-            "(d_model=%d, hidden=%d, bottleneck=%d, dropout=%.2f, stopgrad=%s, gumbel=%s, weight=%.3f)",
+            "(d_model=%d, hidden=%d, bottleneck=%d, dropout=%.2f, stopgrad=%s, gumbel=%s, "
+            "weight=%.3f, frame0=%s, ce_pregrasp_only=%s)",
             d_model, hidden, bottleneck, dropout, stopgrad, gumbel, weight,
+            frame0_mode, ce_pregrasp_only,
         )
 
     VLAFlowMatching.__init__ = _patched_vlaf_init
@@ -213,8 +221,23 @@ def apply() -> None:
             logging.warning("[eval3_slot_bottleneck] unexpected prefix layout; slot token skipped")
             return embs, pad_masks, att_masks
 
-        img_embs = embs[:, :n_img, :]
         lang_embs = embs[:, n_img : n_img + n_lang, :]
+        if frame0_mode:
+            # Cameras embed in order [cam1=frame-t, cam2=frame-0, cam3=empty];
+            # the classifier must read ONLY the cam2 (frame-0) token slice so
+            # it never sees the coke's motion.
+            n_cams = max(1, len(getattr(self.config, "image_features", []) or [1]))
+            tok_per_cam = (n_img // n_cams) if n_cams else n_img
+            if n_cams >= 2 and tok_per_cam > 0:
+                img_embs = embs[:, tok_per_cam : 2 * tok_per_cam, :]
+            else:
+                img_embs = embs[:, :n_img, :]
+                logging.warning(
+                    "[eval3_slot_bottleneck] frame0 mode: cannot isolate cam2 "
+                    "(n_img=%d n_cams=%d) — using all image tokens", n_img, n_cams,
+                )
+        else:
+            img_embs = embs[:, :n_img, :]
         logits, feat = self.slot_clf(img_embs, lang_embs, lang_masks)
         self._last_slot_logits = logits  # (B, 3), fp32 — picked up by SmolVLAPolicy.forward
         # h_slot token: soft path detaches the CE-trained bottleneck then
@@ -236,6 +259,7 @@ def apply() -> None:
 
     def _patched_policy_forward(self, batch, noise=None, time=None, reduction="mean"):
         target_position = batch.pop("target_position", None)
+        is_pregrasp = batch.pop("is_pregrasp", None)
         out = _orig_policy_forward(self, batch, noise=noise, time=time, reduction=reduction)
         loss, loss_dict = out
 
@@ -243,16 +267,26 @@ def apply() -> None:
         logits = getattr(self.model, "_last_slot_logits", None)
         if logits is not None and isinstance(target_position, torch.Tensor) and weight > 0.0:
             tp = target_position.view(-1).to(dtype=torch.long, device=logits.device)
-            valid = tp != -100
-            if bool(valid.any()):
-                slot_loss = F.cross_entropy(logits.float(), tp, ignore_index=-100, reduction="mean")
+            mask = tp != -100
+            if ce_pregrasp_only and isinstance(is_pregrasp, torch.Tensor):
+                # Count the slot CE loss only on pre-grasp frames — the slot
+                # must be decided before the carry begins (the gradient always
+                # propagates; there is no expert-freeze phase).
+                pg = is_pregrasp.view(-1).to(device=logits.device)
+                mask = mask & (pg > 0)
+            if bool(mask.any()):
+                ce = F.cross_entropy(logits.float(), tp, ignore_index=-100, reduction="none")
+                m = mask.float()
+                denom = m.sum().clamp_min(1.0)
+                slot_loss = (ce * m).sum() / denom
                 with torch.no_grad():
-                    preds = logits[valid].argmax(dim=-1)
-                    slot_acc = float((preds == tp[valid]).float().mean().item())
+                    preds = logits.argmax(dim=-1)
+                    slot_acc = float(((preds == tp).float() * m).sum().item() / float(denom.item()))
                 loss = loss + weight * slot_loss
                 loss_dict["slot_loss"] = float(slot_loss.item())
                 loss_dict["slot_acc"] = slot_acc
                 loss_dict["slot_weight"] = float(weight)
+                loss_dict["slot_ce_n"] = float(denom.item())
                 loss_dict["loss"] = (
                     float(loss.item()) if reduction == "mean" else float(loss.mean().item())
                 )
