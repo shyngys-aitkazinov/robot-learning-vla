@@ -134,7 +134,7 @@ if [[ "${EVAL3_DRY_RUN:-0}" == "1" ]]; then
 fi
 
 # Same image transforms as v15.
-TFS_JSON='{"brightness":{"weight":2.0,"type":"ColorJitter","kwargs":{"brightness":[0.6,1.4]}},"contrast":{"weight":2.0,"type":"ColorJitter","kwargs":{"contrast":[0.6,1.4]}},"saturation":{"weight":1.0,"type":"ColorJitter","kwargs":{"saturation":[0.7,1.3]}},"hue":{"weight":0.5,"type":"ColorJitter","kwargs":{"hue":[-0.05,0.05]}},"sharpness":{"weight":0.75,"type":"SharpnessJitter","kwargs":{"sharpness":[0.6,1.4]}},"affine":{"weight":1.0,"type":"RandomAffine","kwargs":{"degrees":[-3.0,3.0],"translate":[0.04,0.04]}},"perspective":{"weight":0.75,"type":"RandomPerspective","kwargs":{"distortion_scale":0.18,"p":0.4}},"random_erasing":{"weight":1.5,"type":"RandomErasing","kwargs":{"p":0.4,"scale":[0.02,0.25],"ratio":[0.3,3.3],"value":0}}}'
+TFS_JSON='{"brightness":{"weight":2.0,"type":"ColorJitter","kwargs":{"brightness":[0.6,1.4]}},"contrast":{"weight":2.0,"type":"ColorJitter","kwargs":{"contrast":[0.6,1.4]}},"saturation":{"weight":1.0,"type":"ColorJitter","kwargs":{"saturation":[0.7,1.3]}},"hue":{"weight":0.5,"type":"ColorJitter","kwargs":{"hue":[-0.05,0.05]}},"sharpness":{"weight":0.75,"type":"SharpnessJitter","kwargs":{"sharpness":[0.6,1.4]}},"affine":{"weight":1.0,"type":"RandomAffine","kwargs":{"degrees":[-3.0,3.0],"translate":[0.04,0.04]}},"perspective":{"weight":0.75,"type":"RandomPerspective","kwargs":{"distortion_scale":0.18,"p":0.4}},"random_erasing":{"weight":1.0,"type":"RandomErasing","kwargs":{"p":0.4,"scale":[0.02,0.08],"ratio":[0.3,3.3],"value":0}}}'
 
 exec python scripts/train_eval3_smolvla.py \
   --policy.path="$POLICY_PATH" \
