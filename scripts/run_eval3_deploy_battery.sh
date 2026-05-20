@@ -30,6 +30,8 @@
 #   v6_pinned_warm15k_1k : eval3-smolvla-3way-2k-b128-v6-pinned-warm15k-step1k (pins-pool synth, warm 15k)
 #   v6_pinned_warm15k_2k : eval3-smolvla-3way-2k-b128-v6-pinned-warm15k-step2k (pins-pool synth, warm 15k)
 #   v10_balanced_new66_10k : eval3-smolvla-v10-balanced-new66-10k      (v4-balanced synth + new66 real)
+#   v10_fresh_v4balanced_new66_50k : eval3-vla-v10-smolvla-fresh-v4balanced-new66-50k (v4-balanced + new66, fresh, 50k)
+#   v10_h100_expert_20k : eval3-smolvla-v10-h100-expert-20k            (v10 H100 expert-only run, 20k snapshot)
 #
 # 2026-05-20 additions — pinned ID+OOD aux-head runs, default mode: raw:
 #   Fine-tuned (5k run, warm-started from v6-synth step15k, aux loss weight 0.5):
@@ -193,6 +195,19 @@ case "$CHECKPOINT_NAME" in
     POLICY_PATH="RobotLearningVLA/eval3-smolvla-v10-balanced-new66-10k"
     # v10 v4_balanced_new66 recipe's training primary is the v2 truncated new66 left repo
     # (extras = rest of new66 + 3 v4 balanced synth datasets — see scripts/run_eval3_smolvla_v10_train.sh).
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v2_taylor_swift_left_1_v6_truncated"
+    DEFAULT_MODE="raw"
+    ;;
+  v10_fresh_v4balanced_new66_50k)
+    POLICY_PATH="RobotLearningVLA/eval3-vla-v10-smolvla-fresh-v4balanced-new66-50k"
+    # Same v10 v4_balanced_new66 recipe as v10_balanced_new66_10k; training
+    # primary per the checkpoint's train_config.json is the v2 truncated new66 left repo.
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v2_taylor_swift_left_1_v6_truncated"
+    DEFAULT_MODE="raw"
+    ;;
+  v10_h100_expert_20k)
+    POLICY_PATH="RobotLearningVLA/eval3-smolvla-v10-h100-expert-20k"
+    # train_config.json: same v2 truncated new66 left primary, expert-only H100 run.
     DATASET_REPO_ID="RobotLearningVLA/dataset_v2_taylor_swift_left_1_v6_truncated"
     DEFAULT_MODE="raw"
     ;;
