@@ -1427,12 +1427,15 @@ class Eval3PrepDataset(Dataset):
             row = dict(row)
             mutated = True
         row["target_position"] = torch.as_tensor(self._target_position_idx, dtype=torch.long)
-        # v16: attach frame-0 image (-> camera2 via rename_map) + pre-grasp flag.
+        # v16: attach the slot-classifier image (-> camera2 via rename_map) +
+        # the pre-grasp flag. camera2 = the CURRENT frame when this sample is
+        # pre-grasp (so CE supervises every pre-grasp frame as the dataloader
+        # sweeps the episode), else the episode's frame-0 (a valid pre-grasp
+        # scene — keeps h_slot defined for the action expert; not CE'd because
+        # is_pregrasp=0). At deploy camera2 is always frame-0, which is in this
+        # CE-training distribution (t=0 is itself a pre-grasp frame).
         if self._frame0_by_ep or self._grasp_offset_by_ep:
             ep = int(self._episode_index_by_frame[int(original_idx)])
-            f0img = self._frame0_by_ep.get(ep)
-            if f0img is not None:
-                row["observation.images.front_frame0"] = f0img
             grasp_off = self._grasp_offset_by_ep.get(ep)
             if grasp_off is None:
                 is_pre = 1
@@ -1440,6 +1443,12 @@ class Eval3PrepDataset(Dataset):
                 ep_start = self._episode_from_idxs[ep]
                 is_pre = 1 if (int(original_idx) - ep_start) <= grasp_off else 0
             row["is_pregrasp"] = torch.as_tensor(int(is_pre), dtype=torch.long)
+            if is_pre and self._image_key in row:
+                row["observation.images.front_frame0"] = row[self._image_key]
+            else:
+                f0img = self._frame0_by_ep.get(ep)
+                if f0img is not None:
+                    row["observation.images.front_frame0"] = f0img
         return row
 
     # ----- Catch-all proxy --------------------------------------------------

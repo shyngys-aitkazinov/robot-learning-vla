@@ -293,6 +293,7 @@ def apply() -> None:
                 self._last_slot_dict = {
                     "slot_loss": float(slot_loss.item()),
                     "slot_acc": slot_acc,
+                    "slot_ce_n": float(denom.item()),
                 }
         return loss, loss_dict
 
@@ -308,6 +309,7 @@ def apply() -> None:
         metrics = dict(metrics)
         metrics.setdefault("slot_loss", AverageMeter("slot_loss", ":.3f"))
         metrics.setdefault("slot_acc", AverageMeter("slot_acc", ":.3f"))
+        metrics.setdefault("slot_ce_n", AverageMeter("slot_ce_n", ":.1f"))
         _orig_mt_init(self, batch_size, num_frames, num_episodes, metrics,
                       initial_step=initial_step, accelerator=accelerator)
 
@@ -347,6 +349,8 @@ def apply() -> None:
                     _orig_mt_setattr(self, "slot_loss", sd["slot_loss"])
                 if "slot_acc" in self.metrics:
                     _orig_mt_setattr(self, "slot_acc", sd["slot_acc"])
+                if "slot_ce_n" in self.metrics and "slot_ce_n" in sd:
+                    _orig_mt_setattr(self, "slot_ce_n", sd["slot_ce_n"])
             counter = _get_curriculum_counter()
             if counter is not None:
                 counter.set_step(int(self.steps))
