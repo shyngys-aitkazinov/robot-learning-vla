@@ -70,22 +70,35 @@ def _policy_path_from_argv() -> str | None:
 
 def _detect_head(path: str | None) -> str:
     """Return 'slot' / 'aux' / 'none' by inspecting the checkpoint weights."""
+    st: Path | None = None
     if path:
-        st = Path(path) / "model.safetensors"
-        if st.is_file():
+        local = Path(path) / "model.safetensors"
+        if local.is_file():
+            st = local
+        elif "/" in path and not Path(path).exists():
+            # HF repo id — fetch model.safetensors (goes to the HF cache, which
+            # lerobot reuses when it loads the policy, so this is not a double
+            # download). Makes detection bulletproof for Hub deploys.
             try:
-                from safetensors import safe_open
+                from huggingface_hub import hf_hub_download
 
-                with safe_open(str(st), framework="pt") as f:
-                    keys = list(f.keys())
-                if any("slot_clf" in k for k in keys):
-                    return "slot"
-                if any("position_clf_head" in k for k in keys):
-                    return "aux"
-                return "none"
+                st = Path(hf_hub_download(path, "model.safetensors"))
             except Exception:
-                pass
-    # non-local (HF repo) or unreadable — fall back to the env-var hint.
+                st = None
+    if st is not None and st.is_file():
+        try:
+            from safetensors import safe_open
+
+            with safe_open(str(st), framework="pt") as f:
+                keys = list(f.keys())
+            if any("slot_clf" in k for k in keys):
+                return "slot"
+            if any("position_clf_head" in k for k in keys):
+                return "aux"
+            return "none"
+        except Exception:
+            pass
+    # unreadable — fall back to the env-var hint.
     weight = os.environ.get("EVAL3_SLOT_LOSS_WEIGHT", "0").strip()
     return "slot" if weight not in ("", "0", "0.0") else "aux"
 

@@ -50,6 +50,10 @@
 #     v6_idood_aux_fresh_10k : eval3-smolvla-3way-20k-b128-v6-pinned-idood-aux-fresh-step10k
 #     v6_idood_aux_fresh_15k : eval3-smolvla-3way-20k-b128-v6-pinned-idood-aux-fresh-step15k
 #
+# 2026-05-20 — slot-bottleneck 5k run (prefix-side classifier), default mode: raw:
+#   slot_3k    : eval3-smolvla-3way-5k-b128-slot-bottleneck-step3k
+#   slot_2100  : eval3-smolvla-3way-5k-b128-slot-bottleneck-step2100
+#
 # FlowerVLA (NOT supported by eval3_vla_deploy.py — entry exits with help):
 #   flower_new66      : eval3-flower-new66-50k                     (Florence-2 + FlowerVLA, separate deploy)
 #
@@ -280,6 +284,21 @@ case "$CHECKPOINT_NAME" in
     ;;
   v6_idood_aux_fresh_15k)
     POLICY_PATH="RobotLearningVLA/eval3-smolvla-3way-20k-b128-v6-pinned-idood-aux-fresh-step15k"
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v3_synth_pinned_idood_taylor_swift_left_2"
+    DEFAULT_MODE="raw"
+    ;;
+
+  # --- 2026-05-20: slot-bottleneck 5k run — mid-training test checkpoints ---
+  # eval3_vla_deploy.py auto-detects the slot head from the checkpoint weights
+  # and applies the slot-bottleneck patch (needed — these carry an h_slot
+  # prefix token). Training primary = pinned ID+OOD taylor_left_2.
+  slot_3k)
+    POLICY_PATH="RobotLearningVLA/eval3-smolvla-3way-5k-b128-slot-bottleneck-step3k"
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v3_synth_pinned_idood_taylor_swift_left_2"
+    DEFAULT_MODE="raw"
+    ;;
+  slot_2100)
+    POLICY_PATH="RobotLearningVLA/eval3-smolvla-3way-5k-b128-slot-bottleneck-step2100"
     DATASET_REPO_ID="RobotLearningVLA/dataset_v3_synth_pinned_idood_taylor_swift_left_2"
     DEFAULT_MODE="raw"
     ;;
