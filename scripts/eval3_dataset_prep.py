@@ -277,6 +277,9 @@ class StateAugmenter:
         gripper_noise_scale: float = 0.1,
         state_std: tuple | list | None = None,
         seed: int = 1337,
+        postgrasp_grip_thresh: float | None = None,
+        postgrasp_sigma_mult: float = 1.0,
+        postgrasp_replace_prob: float | None = None,
     ):
         self._sigma_max = float(sigma_max)
         self._sigma_min = float(sigma_min)
@@ -286,6 +289,18 @@ class StateAugmenter:
         self._mode_zero_weight = float(mode_zero_weight)
         self._home_jitter_sigma = float(home_jitter_sigma)
         self._gripper_noise_scale = float(gripper_noise_scale)
+        # Post-grasp regime: when the raw gripper aperture is below this
+        # threshold the arm is at-rest or carrying the can — the phase where
+        # the target direction is chosen. Amplify state noise there so the
+        # policy cannot ride proprio-continuation and must read the slot token.
+        # None = feature disabled.
+        self._postgrasp_grip_thresh = (
+            float(postgrasp_grip_thresh) if postgrasp_grip_thresh is not None else None
+        )
+        self._postgrasp_sigma_mult = float(postgrasp_sigma_mult)
+        self._postgrasp_replace_prob = (
+            float(postgrasp_replace_prob) if postgrasp_replace_prob is not None else None
+        )
         # state_std (6,) — per-joint training-set stddev. sigma is interpreted
         # in normalized stddev units; raw-degree noise = sigma * state_std.
         # None → fallback to raw-degree interpretation (uneven per joint).
@@ -339,9 +354,23 @@ class StateAugmenter:
 
     def __call__(self, state: torch.Tensor) -> torch.Tensor:
         """Augment a single-sample state vector (shape: (6,) — float tensor)."""
+        # Post-grasp regime check — read the ORIGINAL gripper (last joint)
+        # before any replacement/noise. Below the threshold => at-rest or
+        # carrying the can => amplify replacement probability and noise sigma.
+        replace_prob = self._replace_prob
+        sigma_mult = 1.0
+        if self._postgrasp_grip_thresh is not None:
+            try:
+                grip = float(state[-1])
+            except Exception:
+                grip = None
+            if grip is not None and grip < self._postgrasp_grip_thresh:
+                if self._postgrasp_replace_prob is not None:
+                    replace_prob = self._postgrasp_replace_prob
+                sigma_mult = self._postgrasp_sigma_mult
         # First decide on replacement (B + D unified). The two modes are
         # mutually exclusive per call; weights pick which one runs (if any).
-        if self._replace_prob > 0.0 and self._rng.random() < self._replace_prob:
+        if replace_prob > 0.0 and self._rng.random() < replace_prob:
             total = self._mode_home_weight + self._mode_zero_weight
             if total <= 0:
                 mode_roll = -1.0  # both weights zero → skip replacement
@@ -361,7 +390,7 @@ class StateAugmenter:
         # stddev units, so raw-degree noise per joint = sigma * state_std[j].
         # This gives uniform perturbation across joints in the space the
         # model sees (after lerobot normalizer's (x - mean) / std).
-        sigma = self._current_sigma()
+        sigma = self._current_sigma() * sigma_mult
         if sigma > 0.0:
             std_t = self._get_std(state)
             if std_t is not None:
@@ -392,6 +421,9 @@ class StateAugmenter:
                 self._gripper_noise_scale,
                 self._state_std,
                 self._seed,
+                self._postgrasp_grip_thresh,
+                self._postgrasp_sigma_mult,
+                self._postgrasp_replace_prob,
             ),
         )
 
@@ -452,6 +484,23 @@ def make_state_augmenter(state_std: tuple | list | None = None) -> "StateAugment
     except Exception:
         pass  # fall back to defaults on parse failure
 
+    # Post-grasp heavy-noise knobs (see StateAugmenter docstring).
+    pg_thresh_raw = os.environ.get("EVAL3_STATE_POSTGRASP_GRIP_THRESH", "").strip()
+    postgrasp_grip_thresh: float | None = None
+    if pg_thresh_raw:
+        try:
+            postgrasp_grip_thresh = float(pg_thresh_raw)
+        except ValueError:
+            postgrasp_grip_thresh = None
+    postgrasp_sigma_mult = _ef("EVAL3_STATE_POSTGRASP_SIGMA_MULT", 1.0)
+    pg_replace_raw = os.environ.get("EVAL3_STATE_POSTGRASP_REPLACE_PROB", "").strip()
+    postgrasp_replace_prob: float | None = None
+    if pg_replace_raw:
+        try:
+            postgrasp_replace_prob = float(pg_replace_raw)
+        except ValueError:
+            postgrasp_replace_prob = None
+
     # If nothing is enabled, return None — the caller will skip wiring.
     if sigma_max <= 0.0 and replace_prob <= 0.0:
         return None
@@ -465,6 +514,9 @@ def make_state_augmenter(state_std: tuple | list | None = None) -> "StateAugment
         home_jitter_sigma=home_jitter_sigma,
         gripper_noise_scale=gripper_noise_scale,
         state_std=state_std,
+        postgrasp_grip_thresh=postgrasp_grip_thresh,
+        postgrasp_sigma_mult=postgrasp_sigma_mult,
+        postgrasp_replace_prob=postgrasp_replace_prob,
     )
 
 

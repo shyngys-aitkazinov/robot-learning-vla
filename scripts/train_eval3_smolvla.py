@@ -37,12 +37,21 @@ from eval3_concat_patch import apply_concat_patch as _eval3_concat_apply  # noqa
 
 _eval3_concat_apply()
 
-# Optional auxiliary position-classification head (forces SmolVLA's
-# hidden state to encode language-image binding). No-op unless
-# EVAL3_AUX_POS_LOSS_WEIGHT > 0.
-from eval3_smolvla_aux_head import apply as _eval3_aux_head_apply  # noqa: E402
+# Slot-bottleneck head XOR the legacy aux head — mutually exclusive (both
+# monkey-patch SmolVLAPolicy.forward). The slot bottleneck (prefix-side
+# classifier on image+language tokens, no suffix/action leak) is selected
+# when EVAL3_SLOT_LOSS_WEIGHT > 0; otherwise fall back to the legacy aux
+# head (itself a no-op unless EVAL3_AUX_POS_LOSS_WEIGHT > 0).
+import os as _os  # noqa: E402
 
-_eval3_aux_head_apply()
+if _os.environ.get("EVAL3_SLOT_LOSS_WEIGHT", "0").strip() not in ("", "0", "0.0"):
+    from eval3_smolvla_slot_bottleneck import apply as _eval3_slot_apply  # noqa: E402
+
+    _eval3_slot_apply()
+else:
+    from eval3_smolvla_aux_head import apply as _eval3_aux_head_apply  # noqa: E402
+
+    _eval3_aux_head_apply()
 
 from eval3_train_hub_patch import apply_hub_patch as _eval3_hub_apply  # noqa: E402
 

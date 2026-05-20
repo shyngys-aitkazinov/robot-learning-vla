@@ -47,13 +47,62 @@ from eval3_lerobot_shim import apply as _eval3_shim_apply
 
 _eval3_shim_apply()
 
-# Apply the aux-head patch so checkpoints trained with EVAL3_AUX_POS_LOSS_WEIGHT
-# > 0 load cleanly (their state_dict carries `position_clf_head.*` keys). Setting
-# loss_weight unset / 0 makes it a runtime no-op — the head exists but never
-# contributes a gradient, and sample_actions doesn't touch it at all.
-from eval3_smolvla_aux_head import apply as _eval3_aux_head_apply  # noqa: E402
+# Select the head patch to MATCH the checkpoint — this must be decided before
+# `lerobot.policies` is imported.
+#   * slot-bottleneck checkpoints (eval3_smolvla_slot_bottleneck) carry
+#     `slot_clf.*` weights AND were trained with an extra h_slot prefix token;
+#     they MUST load with that patch or the prefix length mismatches train vs
+#     deploy and the policy silently produces garbage.
+#   * legacy aux-head checkpoints carry `position_clf_head.*`.
+# We peek the checkpoint's safetensors header (local) to pick; for an HF-repo
+# path we fall back to the EVAL3_SLOT_LOSS_WEIGHT env hint.
+import os  # noqa: E402
 
-_eval3_aux_head_apply()
+
+def _policy_path_from_argv() -> str | None:
+    for i, a in enumerate(sys.argv):
+        if a.startswith("--policy.path="):
+            return a.split("=", 1)[1]
+        if a == "--policy.path" and i + 1 < len(sys.argv):
+            return sys.argv[i + 1]
+    return None
+
+
+def _detect_head(path: str | None) -> str:
+    """Return 'slot' / 'aux' / 'none' by inspecting the checkpoint weights."""
+    if path:
+        st = Path(path) / "model.safetensors"
+        if st.is_file():
+            try:
+                from safetensors import safe_open
+
+                with safe_open(str(st), framework="pt") as f:
+                    keys = list(f.keys())
+                if any("slot_clf" in k for k in keys):
+                    return "slot"
+                if any("position_clf_head" in k for k in keys):
+                    return "aux"
+                return "none"
+            except Exception:
+                pass
+    # non-local (HF repo) or unreadable — fall back to the env-var hint.
+    weight = os.environ.get("EVAL3_SLOT_LOSS_WEIGHT", "0").strip()
+    return "slot" if weight not in ("", "0", "0.0") else "aux"
+
+
+_head = _detect_head(_policy_path_from_argv())
+if _head == "slot":
+    os.environ.setdefault("EVAL3_SLOT_LOSS_WEIGHT", "0.5")  # so apply() installs the patch
+    from eval3_smolvla_slot_bottleneck import apply as _eval3_slot_apply  # noqa: E402
+
+    _eval3_slot_apply()
+    logging.info("eval3_vla_deploy: slot-bottleneck checkpoint detected — slot patch applied")
+else:
+    # legacy aux head — a benign no-op for plain checkpoints (the head exists
+    # but sample_actions never touches it).
+    from eval3_smolvla_aux_head import apply as _eval3_aux_head_apply  # noqa: E402
+
+    _eval3_aux_head_apply()
 
 import torch  # noqa: E402
 from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig  # noqa: F401, E402
