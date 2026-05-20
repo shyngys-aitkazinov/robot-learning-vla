@@ -45,6 +45,7 @@ import logging
 import os
 
 _APPLIED = False
+_V16_PREFIX_LOGGED = [False]  # one-time v16 prefix-layout diagnostic
 
 
 def _env_float(name: str, default: float) -> float:
@@ -225,8 +226,11 @@ def apply() -> None:
         if frame0_mode:
             # Cameras embed in order [cam1=frame-t, cam2=frame-0, cam3=empty];
             # the classifier must read ONLY the cam2 (frame-0) token slice so
-            # it never sees the coke's motion.
-            n_cams = max(1, len(getattr(self.config, "image_features", []) or [1]))
+            # it never sees the coke's motion. n_cams = the ACTUAL number of
+            # images embedded (len(images)) — NOT len(config.image_features),
+            # which can disagree with how many cameras prepare_images emits
+            # and silently mis-slices the prefix.
+            n_cams = max(1, len(images))
             tok_per_cam = (n_img // n_cams) if n_cams else n_img
             if n_cams >= 2 and tok_per_cam > 0:
                 img_embs = embs[:, tok_per_cam : 2 * tok_per_cam, :]
@@ -238,6 +242,25 @@ def apply() -> None:
                 )
         else:
             img_embs = embs[:, :n_img, :]
+        if frame0_mode and not _V16_PREFIX_LOGGED[0]:
+            # One-time check: confirm camera2 (the slot/frame-0 input) actually
+            # arrives as a REAL image, not an empty -1 pad. An empty camera has
+            # mean -1.0 / std 0.0; a real frame has std > 0.
+            _V16_PREFIX_LOGGED[0] = True
+            try:
+                cam_stats = [
+                    (tuple(im.shape), round(float(im.float().mean()), 4), round(float(im.float().std()), 4))
+                    for im in images
+                ]
+                logging.info(
+                    "[eval3_slot_bottleneck] v16 prefix check: %d images embedded, "
+                    "n_img=%d n_cams=%d tok_per_cam=%d, slot reads token slice [%d:%d]; "
+                    "per-camera (shape,mean,std)=%s",
+                    len(images), n_img, n_cams, tok_per_cam,
+                    tok_per_cam, 2 * tok_per_cam, cam_stats,
+                )
+            except Exception as _e:
+                logging.warning("[eval3_slot_bottleneck] v16 prefix check failed: %s", _e)
         logits, feat = self.slot_clf(img_embs, lang_embs, lang_masks)
         self._last_slot_logits = logits  # (B, 3), fp32 — picked up by SmolVLAPolicy.forward
         # h_slot token: soft path detaches the CE-trained bottleneck then
