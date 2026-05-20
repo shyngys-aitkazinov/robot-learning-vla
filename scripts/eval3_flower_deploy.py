@@ -29,6 +29,14 @@ from eval3_lerobot_shim import apply as _eval3_shim_apply
 
 _eval3_shim_apply()
 
+# FlowerVLA's attention (external/flower_vla_calvin) passes both an explicit
+# attn_mask and is_causal=True to F.scaled_dot_product_attention, which
+# torch>=2.x rejects. This shim merges is_causal into the mask. Must run
+# before the FlowerVLA model executes a forward pass.
+from eval3_flower_sdpa_compat import apply as _eval3_flower_sdpa_apply  # noqa: E402
+
+_eval3_flower_sdpa_apply()
+
 import torch  # noqa: E402
 import torch.nn.functional as F  # noqa: E402
 from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig  # noqa: F401, E402
@@ -516,6 +524,16 @@ def _deploy_loop(
         previous_guarded_action: dict[str, float] | None = None
         step = 0
         start_t = time.perf_counter()
+
+        # NOTE on smoothness: FlowerVLA re-infers a fresh action chunk every
+        # `chunk_size` steps, and each inference (Florence-2 backbone) takes
+        # ~1-2 s. Async prefetch was considered but does NOT work here: with
+        # chunk_size=10 and inference ≈ one chunk-duration, a prefetched chunk
+        # is conditioned on a ~9-step-stale state, so its early actions point
+        # backward and jerk the arm at chunk boundaries. The synchronous
+        # re-conditioning below is the correct receding-horizon behavior.
+        # The per-chunk pause is inherent to the slow VLM backbone; lower
+        # `num_sampling_steps` (DiT integration steps) trims it modestly.
 
         while time.perf_counter() - start_t < cfg.episode_time_s:
             loop_t = time.perf_counter()

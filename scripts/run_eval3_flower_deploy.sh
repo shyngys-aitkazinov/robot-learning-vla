@@ -75,8 +75,25 @@ esac
 CAM_IDX="${CAM_IDX:-0}"
 CHECKPOINT="${EVAL3_FLOWER_CHECKPOINT:-RobotLearningVLA/eval3-flower-new66-50k}"
 
-# Defaults mirror the user's tested command. Override any of them by passing
-# the flag as a trailing argument — Python argparse last-wins.
+# Defaults tuned for smoother + faster motion vs the original conservative
+# values. Override any of them by passing the flag as a trailing argument
+# (Python argparse last-wins).
+#
+#   motion_gain            0.5  — arm commits 50% of each predicted move toward
+#                                 the target per step (was 0.25 = a slow crawl).
+#                                 This is the biggest "faster" lever.
+#   max_action_delta_deg   8    — per-step joint slew cap (was 4); lets the arm
+#                                 actually keep up with the predicted chunk.
+#   action_smoothing_alpha 0.3  — EMA weight on the previous command (was 0.35);
+#                                 slightly less lag, still smooth.
+#   fps                    6    — control rate (was 5).
+#
+# NOTE on the per-chunk pause: FlowerVLA re-infers every 10 steps and each
+# inference (Florence-2 backbone) takes ~1-2 s, during which the arm holds
+# still. That pause is inherent — async prefetch can't hide it because the
+# 10-step chunk is too short to re-condition on a fresh state. To trim it,
+# append e.g. --num_sampling_steps=3 (fewer DiT integration steps; minor
+# action-quality tradeoff).
 COMMON_ARGS=(
   --robot.type=so101_follower
   --robot.port="$FOLLOWER_TTY"
@@ -86,10 +103,10 @@ COMMON_ARGS=(
   --flower_src=external/flower_vla_calvin
   --device=auto
   --episode_time_s=60
-  --fps=5
-  --motion_gain=0.25
-  --action_smoothing_alpha=0.35
-  --max_action_delta_deg=4
+  --fps=6
+  --motion_gain=0.5
+  --action_smoothing_alpha=0.3
+  --max_action_delta_deg=8
   --allow_live_motors=true
 )
 

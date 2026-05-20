@@ -29,7 +29,12 @@ Guarded 3s hardware smoke test::
       --allow_live_motors=true
 """
 
-from __future__ import annotations
+# NB: deliberately NO `from __future__ import annotations`. lerobot's
+# parser.wrap() reads the config dataclass via inspect.getfullargspec().
+# annotations — under PEP 563 lazy annotations that yields the bare string
+# "Eval3OpenVLADeployConfig" instead of the class, and draccus then fails
+# with "must be called with a dataclass type or instance". Python 3.12
+# supports the modern annotation syntax natively without the future import.
 
 import json
 import logging
@@ -53,6 +58,15 @@ if str(OPENVLA_ROOT) not in sys.path:
 from eval3_lerobot_shim import apply as _eval3_shim_apply
 
 _eval3_shim_apply()
+
+# OpenVLA pins transformers==4.40.1; lerobot's policies/__init__.py eagerly
+# imports pi05/smolvla/... which need much newer transformers. The OpenVLA
+# deploy uses only lerobot's robot/camera/control utilities (never a lerobot
+# policy), so we pre-stub lerobot.policies to skip that import cascade.
+# MUST run before any `from lerobot...` import below.
+from eval3_openvla_lerobot_compat import apply as _eval3_openvla_lr_apply  # noqa: E402
+
+_eval3_openvla_lr_apply()
 
 import torch  # noqa: E402
 from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig  # noqa: F401, E402

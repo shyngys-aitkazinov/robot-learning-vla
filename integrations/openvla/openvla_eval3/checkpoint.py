@@ -134,9 +134,31 @@ def load_eval3_openvla(
     if merge_lora:
         model = model.merge_and_unload()
 
-    model.config.norm_stats = norm_stats
-    if hasattr(model, "norm_stats"):
-        model.norm_stats = norm_stats
+    # Inject the Eval3 normalization stats so `predict_action(unnorm_key=...)`
+    # can resolve our SO-101 key. Critically, `predict_action` /
+    # `get_action_dim` run BOUND TO THE BASE OpenVLA model (PeftModel and
+    # LoraModel just delegate the attribute via __getattr__), so they read
+    # `self.norm_stats` off the base — setting it only on the PeftModel
+    # wrapper is not enough. Set it on every layer of the wrapping
+    # (PeftModel -> LoraModel -> base OpenVLA) plus each `.config`.
+    _norm_targets = []
+    _node = model
+    for _ in range(4):  # PeftModel -> base_model(LoraModel) -> model(base VLA)
+        if _node is None or id(_node) in {id(t) for t in _norm_targets}:
+            break
+        _norm_targets.append(_node)
+        _node = getattr(_node, "model", None) or getattr(_node, "base_model", None)
+    for _t in _norm_targets:
+        try:
+            _t.norm_stats = norm_stats
+        except Exception:  # noqa: BLE001 - some wrappers forbid attr set
+            pass
+        _cfg = getattr(_t, "config", None)
+        if _cfg is not None:
+            try:
+                _cfg.norm_stats = norm_stats
+            except Exception:  # noqa: BLE001
+                pass
     model = model.to(torch_device)
     model.eval()
 
