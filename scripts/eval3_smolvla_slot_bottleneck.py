@@ -46,6 +46,7 @@ import os
 
 _APPLIED = False
 _V16_PREFIX_LOGGED = [False]  # one-time v16 prefix-layout diagnostic
+_V16_MASK_LOGGED = [False]    # one-time v16 pre-grasp CE-mask diagnostic
 
 
 def _env_float(name: str, default: float) -> float:
@@ -302,6 +303,24 @@ def apply() -> None:
                 m = mask.float()
                 denom = m.sum().clamp_min(1.0)
                 slot_loss = (ce * m).sum() / denom
+                if not _V16_MASK_LOGGED[0] and ce_pregrasp_only:
+                    # One-time proof that post-grasp frames contribute 0 to the
+                    # slot CE: the mask m must be 0 on every post-grasp sample.
+                    _V16_MASK_LOGGED[0] = True
+                    try:
+                        pg = (is_pregrasp.view(-1).float().to(m.device)
+                              if isinstance(is_pregrasp, torch.Tensor) else None)
+                        leaked = float((m * (pg < 0.5)).sum().item()) if pg is not None else -1.0
+                        pgv = pg.long().tolist() if pg is not None else None
+                        logging.info(
+                            "[eval3_slot_bottleneck] v16 mask check: is_pregrasp=%s "
+                            "target_pos=%s ce_mask=%s | slot_ce_n=%.0f, "
+                            "post-grasp samples inside CE mask=%.0f (must be 0)",
+                            pgv, tp.tolist(), mask.long().tolist(),
+                            float(denom.item()), leaked,
+                        )
+                    except Exception as _e:
+                        logging.warning("[eval3_slot_bottleneck] v16 mask check failed: %s", _e)
                 with torch.no_grad():
                     preds = logits.argmax(dim=-1)
                     slot_acc = float(((preds == tp).float() * m).sum().item() / float(denom.item()))
