@@ -36,6 +36,7 @@ import draccus  # noqa: E402
 from augmentation import build_image_transforms_config, summarize  # noqa: E402
 from config import PipelineConfig, resolve_finetune  # noqa: E402
 from merge_datasets import ensure_merged  # noqa: E402
+from validate import evaluate_run  # noqa: E402
 
 
 def run(cfg: PipelineConfig) -> Path:
@@ -116,6 +117,15 @@ def run(cfg: PipelineConfig) -> Path:
 
     # 6. Run lerobot's training loop in-process.
     lerobot_train(train_cfg)
+
+    # 7. Held-out validation: score every saved checkpoint on synthetic data.
+    if cfg.validation.enable:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        print("[train] training done — running held-out validation")
+        evaluate_run(cfg, output_dir)
     return output_dir
 
 

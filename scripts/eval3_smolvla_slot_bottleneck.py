@@ -112,6 +112,13 @@ def apply() -> None:
         def __init__(self, d_model: int):
             super().__init__()
             self.d_model = int(d_model)
+            # SmolVLA scales BOTH image and language prefix tokens by sqrt(d)
+            # (~31x) in embed_prefix (modeling_smolvla.py:659,685). Fed raw into
+            # the cross-attention the score std reaches ~960 -> the softmax is
+            # fully saturated -> q_proj gets ~zero gradient and the head
+            # collapses to uniform output. Normalise both streams to unit scale.
+            self.img_ln = nn.LayerNorm(d_model)
+            self.lang_ln = nn.LayerNorm(d_model)
             self.q_proj = nn.Linear(d_model, d_model)
             self.mlp = nn.Sequential(
                 nn.Linear(2 * d_model, hidden),
@@ -138,8 +145,8 @@ def apply() -> None:
             that the CE loss makes slot-separable — embed_prefix turns it into
             the h_slot prefix token via make_token()."""
             dt = self.q_proj.weight.dtype
-            img = img_embs.to(dt)
-            lang = lang_embs.to(dt)
+            img = self.img_ln(img_embs.to(dt))
+            lang = self.lang_ln(lang_embs.to(dt))
             lm = lang_masks.to(dt).unsqueeze(-1)  # (B, n_lang, 1)
             lang_vec = (lang * lm).sum(1) / lm.sum(1).clamp_min(1.0)  # (B, D)
             q = self.q_proj(lang_vec)  # (B, D)

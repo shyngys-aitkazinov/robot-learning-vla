@@ -15,6 +15,7 @@ a third-party dependency; nothing in `.venv/` is edited.
 | `augmentation.py` | Turns `AugmentationConfig` into lerobot's image-transforms config |
 | `merge_datasets.py` | Merges the 9 datasets into one training corpus |
 | `train.py` | The training launcher (entry point) |
+| `validate.py` | Held-out validation — BC loss per checkpoint on synthetic data |
 | `verify.py` | Staged sanity checks + smoke train |
 
 ## Quick start
@@ -67,6 +68,25 @@ result with `verify.py --stage 5` (writes `/ephemeral/outputs/aug_preview/`).
 `steps`, `batch_size`, `save_freq`, `lr`, `device`, `output_dir`, `wandb_*`.
 A smoke run is just `--training.steps=10 --training.batch_size=4`.
 
+### Validation — `--validation.*`
+
+lerobot trains pure behavior cloning on the whole corpus — no built-in
+validation split. So `train.py` adds one: after training it scores **every
+saved checkpoint** (`validate.py`) and prints a ranked table, picking the
+lowest-loss checkpoint.
+
+The held-out set is **synthetic `dataset_v3`** data (one small set per
+celebrity, capped by `--validation.max_episodes_per_dataset`). Training is on
+the *real* `dataset_v4` corpus, so this loss is a **cross-domain** signal — it
+rises once the policy overfits real-data quirks instead of learning the task.
+
+```bash
+# score the checkpoints of a finished (or interrupted) run, standalone:
+uv run python fresh_start/validate.py --training.output_dir=/ephemeral/outputs/<run>
+uv run python fresh_start/train.py --validation.enable=false      # skip validation
+uv run python fresh_start/train.py --validation.max_episodes_per_dataset=8
+```
+
 ## How it works
 
 - **GROOT shim** — lerobot 0.5.1 crashes on `import lerobot.policies` when
@@ -79,6 +99,10 @@ A smoke run is just `--training.steps=10 --training.batch_size=4`.
 - **Augmentation** — applied by lerobot's `ImageTransforms` inside the dataset
   `__getitem__`; noise/blur/lighting are torchvision-v2 transforms selected by
   name, the custom `SpatialLighting` is registered into that namespace.
+- **Validation** — lerobot has no validation hook, so `validate.py` runs
+  *after* training: it loads each checkpoint, runs the BC loss over the
+  held-out synthetic datasets, and ranks them. Augmentation is off for
+  validation; the checkpoint's own (training-set) normalization stats are used.
 
 Outputs (merged dataset, checkpoints, previews) go under `/ephemeral/` and are
 not committed. Single-camera `observation.images.front` is trained as-is — no

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# Eval3 SmolVLA v16 — SLOT-BOTTLENECK fine-tune on the REAL dataset_v4_* corpus
-# with the frame-0 / pre-grasp-CE fix.
+# Eval3 SmolVLA v16 — SLOT-BOTTLENECK fine-tune on the dataset_v4_* (real) +
+# dataset_v3_synth_pinned_idood_*_3 (synthetic) corpus, with the frame-0 /
+# pre-grasp-CE fix and the slot-classifier input-LayerNorm fix.
+# The synth _3 datasets load from ./datasets/<name> (EVAL3_LOCAL_REPOS) — no
+# Hub push needed. Corpus toggles: EVAL3_V16_NO_SYNTH=1 -> real-only,
+# EVAL3_V16_SYNTH_ONLY=1 -> synth-only.
 #
 # v16 vs v15 (run_eval3_smolvla_v15_real_data_slot_train.sh):
 #   - The slot classifier reads the episode's FRAME-0 image, carried in the
@@ -47,8 +51,33 @@ cd "$ROOT"
 # shellcheck disable=SC1091
 source .venv/bin/activate
 
-REPO="RobotLearningVLA/dataset_v4_taylor_left"
-EXTRA_REPOS="RobotLearningVLA/dataset_v4_taylor_middle,RobotLearningVLA/dataset_v4_taylor_right,RobotLearningVLA/dataset_v4_barack_left,RobotLearningVLA/dataset_v4_barack_middle,RobotLearningVLA/dataset_v4_barack_right,RobotLearningVLA/dataset_v4_yann_left,RobotLearningVLA/dataset_v4_yann_middle,RobotLearningVLA/dataset_v4_yann_right"
+REAL_PRIMARY="RobotLearningVLA/dataset_v4_taylor_left"
+REAL_EXTRAS="RobotLearningVLA/dataset_v4_taylor_middle,RobotLearningVLA/dataset_v4_taylor_right,RobotLearningVLA/dataset_v4_barack_left,RobotLearningVLA/dataset_v4_barack_middle,RobotLearningVLA/dataset_v4_barack_right,RobotLearningVLA/dataset_v4_yann_left,RobotLearningVLA/dataset_v4_yann_middle,RobotLearningVLA/dataset_v4_yann_right"
+
+# The 9 synthetic dataset_v3_synth_pinned_idood_*_3 datasets. NOT on the Hub —
+# they load from ./datasets/<name> via EVAL3_LOCAL_REPOS (eval3_concat_patch.
+# _local_root). target_position is derived from each _left_/_middle_/_right_ name.
+SYNTH_PRIMARY="RobotLearningVLA/dataset_v3_synth_pinned_idood_taylor_swift_left_3"
+SYNTH_EXTRAS="RobotLearningVLA/dataset_v3_synth_pinned_idood_taylor_swift_middle_3,RobotLearningVLA/dataset_v3_synth_pinned_idood_taylor_swift_right_3,RobotLearningVLA/dataset_v3_synth_pinned_idood_barack_obama_left_3,RobotLearningVLA/dataset_v3_synth_pinned_idood_barack_obama_middle_3,RobotLearningVLA/dataset_v3_synth_pinned_idood_barack_obama_right_3,RobotLearningVLA/dataset_v3_synth_pinned_idood_yann_lecun_left_3,RobotLearningVLA/dataset_v3_synth_pinned_idood_yann_lecun_middle_3,RobotLearningVLA/dataset_v3_synth_pinned_idood_yann_lecun_right_3"
+SYNTH_ALL="${SYNTH_PRIMARY},${SYNTH_EXTRAS}"
+
+# Corpus mode:
+#   default                -> 9 real v4 + 9 synth _3  (the full v16 corpus)
+#   EVAL3_V16_NO_SYNTH=1    -> 9 real v4 only
+#   EVAL3_V16_SYNTH_ONLY=1  -> 9 synth _3 only (synth primary + 8 synth extras)
+if [[ "${EVAL3_V16_SYNTH_ONLY:-0}" == "1" ]]; then
+  REPO="$SYNTH_PRIMARY"
+  EXTRA_REPOS="$SYNTH_EXTRAS"
+  LOCAL_REPOS="$SYNTH_ALL"
+elif [[ "${EVAL3_V16_NO_SYNTH:-0}" == "1" ]]; then
+  REPO="$REAL_PRIMARY"
+  EXTRA_REPOS="$REAL_EXTRAS"
+  LOCAL_REPOS=""
+else
+  REPO="$REAL_PRIMARY"
+  EXTRA_REPOS="${REAL_EXTRAS},${SYNTH_ALL}"
+  LOCAL_REPOS="$SYNTH_ALL"
+fi
 
 OUT="${EVAL3_TRAIN_OUT:-/ephemeral/outputs/train/eval3_v16_real_data_slot}"
 JOB="${EVAL3_JOB_NAME:-eval3_v16_real_data_slot}"
@@ -75,6 +104,7 @@ fi
 WANDB_PROJECT="${EVAL3_WANDB_PROJECT:-eval3-v16-real-data-slot}"
 
 export EVAL3_EXTRA_REPOS="$EXTRA_REPOS"
+export EVAL3_LOCAL_REPOS="$LOCAL_REPOS"
 export EVAL3_MAX_FRAMES_PER_EP="0"
 export EVAL3_TASK_AUG="1"
 export EVAL3_TASK_AUG_CANONICAL_P="${EVAL3_TASK_AUG_CANONICAL_P:-0.7}"
@@ -114,9 +144,10 @@ unset EVAL3_SWIFT_EPISODE_FILTER
 unset EVAL3_LECUN_EPISODE_FILTER
 unset EVAL3_OBAMA_EPISODE_FILTER
 
-echo ">> Eval3 v16 SmolVLA slot-bottleneck fine-tune — REAL dataset_v4_* + frame-0 fix"
+echo ">> Eval3 v16 SmolVLA slot-bottleneck fine-tune — dataset_v4_* (real) + dataset_v3_synth_pinned_idood_*_3 (synth)"
 echo "   dataset (primary)     : $REPO"
 echo "   virtual extras        : $EVAL3_EXTRA_REPOS"
+echo "   local-root repos      : ${EVAL3_LOCAL_REPOS:-<none>}"
 echo "   policy.path           : $POLICY_PATH  (fresh-from-base)"
 echo "   device                : $DEVICE"
 echo "   steps / batch         : $STEPS / $BATCH"

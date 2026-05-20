@@ -157,6 +157,33 @@ class AugmentationConfig:
 
 
 @dataclass
+class ValidationConfig:
+    """Held-out validation: BC loss of each saved checkpoint on synthetic data.
+
+    Training uses the real dataset_v4 corpus; validation uses synthetic
+    dataset_v3 data, so the number measures cross-domain generalization — it
+    rises once the policy overfits real-data quirks instead of the task.
+    lerobot's training loop has no validation hook, so this runs per-checkpoint
+    after training finishes (and standalone via validate.py).
+    """
+
+    enable: bool = True
+    # Synthetic dataset_v3 datasets used as the held-out set (repo-root relative).
+    # One small set per celebrity so the loss covers all 3 prompts.
+    source_roots: list[str] = field(
+        default_factory=lambda: [
+            "datasets/dataset_v3_synth_pinned_taylor_swift_middle_1",
+            "datasets/dataset_v3_synth_pinned_barack_obama_middle_1",
+            "datasets/dataset_v3_synth_pinned_yann_lecun_middle_1",
+        ]
+    )
+    # Episodes used per dataset — capped to keep the validation set small.
+    max_episodes_per_dataset: int = 4
+    batch_size: int = 16
+    num_workers: int = 2
+
+
+@dataclass
 class PipelineConfig:
     """Top-level config — what every entry point parses."""
 
@@ -164,6 +191,7 @@ class PipelineConfig:
     finetune: FinetuneConfig = field(default_factory=FinetuneConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
     augmentation: AugmentationConfig = field(default_factory=AugmentationConfig)
+    validation: ValidationConfig = field(default_factory=ValidationConfig)
 
 
 def resolve_finetune(finetune: FinetuneConfig) -> tuple[bool, bool, bool]:

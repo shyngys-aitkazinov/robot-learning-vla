@@ -213,16 +213,40 @@ def apply_concat_patch() -> None:
             ImageTransforms(cfg.dataset.image_transforms) if cfg.dataset.image_transforms.enable else None
         )
 
+        # Repos listed in EVAL3_LOCAL_REPOS load from ./datasets/<name> instead
+        # of the Hub — lets locally-generated datasets (e.g. the synth _3 corpus)
+        # train without a Hub push. Everything else loads from the Hub as before.
+        _local_repos = {
+            r.strip() for r in os.environ.get("EVAL3_LOCAL_REPOS", "").split(",") if r.strip()
+        }
+
+        def _local_root(repo_id: str):
+            if repo_id not in _local_repos:
+                return None
+            name = repo_id.rsplit("/", 1)[-1]
+            for cand in (os.path.join("datasets", name),
+                         os.path.join(os.getcwd(), "datasets", name)):
+                if os.path.isdir(os.path.join(cand, "meta")):
+                    return os.path.abspath(cand)
+            raise FileNotFoundError(
+                f"eval3_concat_patch: {repo_id} is in EVAL3_LOCAL_REPOS but "
+                f"datasets/{name}/meta was not found"
+            )
+
         def _build_one(repo_id: str) -> LeRobotDataset:
-            ds_meta = LeRobotDatasetMetadata(repo_id, root=None, revision=cfg.dataset.revision)
+            root = _local_root(repo_id)
+            revision = None if root is not None else cfg.dataset.revision
+            if root is not None:
+                logging.info("eval3_concat_patch: %s -> local root %s", repo_id, root)
+            ds_meta = LeRobotDatasetMetadata(repo_id, root=root, revision=revision)
             delta_timestamps = resolve_delta_timestamps(cfg.policy, ds_meta)
             return LeRobotDataset(
                 repo_id,
-                root=None,
+                root=root,
                 episodes=None,  # use all episodes from each side
                 delta_timestamps=delta_timestamps,
                 image_transforms=image_transforms,
-                revision=cfg.dataset.revision,
+                revision=revision,
                 video_backend=cfg.dataset.video_backend,
                 tolerance_s=cfg.tolerance_s,
             )

@@ -13,7 +13,8 @@ Stages:
     3  merge        — aggregate them into the single training corpus
     4  dataset      — the merged dataset loads; frames are float [0,1] CHW
     5  augmentation — apply the configured transforms, save before/after PNGs
-    6  smoke train  — a short SmolVLA fine-tune (downloads smolvla_base)
+    6  smoke train  — a short SmolVLA fine-tune + held-out validation
+                      (downloads smolvla_base)
 """
 
 from __future__ import annotations
@@ -149,7 +150,7 @@ def stage5_augmentation(cfg: PipelineConfig, n_samples: int = 4) -> None:
 
 
 def stage6_smoke(cfg: PipelineConfig, steps: int, batch: int) -> None:
-    _banner(6, f"Smoke train ({steps} steps, batch {batch})")
+    _banner(6, f"Smoke train + validation ({steps} steps, batch {batch})")
     import train as train_module
 
     smoke = copy.deepcopy(cfg)
@@ -161,6 +162,8 @@ def stage6_smoke(cfg: PipelineConfig, steps: int, batch: int) -> None:
     smoke.training.wandb_enable = False
     smoke.training.job_name = "smolvla_smoke"
     smoke.training.output_dir = f"/ephemeral/outputs/smoke_{int(time.time())}"
+    # keep the post-train validation tiny so the smoke stays fast
+    smoke.validation.max_episodes_per_dataset = 1
 
     out_dir = train_module.run(smoke)
     checkpoints = sorted(Path(out_dir).glob("checkpoints/*/pretrained_model"))
