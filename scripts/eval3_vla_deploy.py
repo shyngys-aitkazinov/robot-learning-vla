@@ -103,13 +103,18 @@ def _detect_head(path: str | None) -> str:
     return "slot" if weight not in ("", "0", "0.0") else "aux"
 
 
-def _detect_frame0(path: str | None) -> bool:
-    """True if the checkpoint was trained with the v16 frame-0 slot mode — its
-    train_config.json rename_map carries an ``observation.images.*_frame0``
-    entry. The slot patch must then read the camera2 token slice at inference.
+def _frame0_rename_map(path: str | None) -> dict[str, str] | None:
+    """If the checkpoint was trained in v16 frame-0 slot mode, return its
+    train_config.json rename_map — which carries an
+    ``observation.images.*_frame0 -> observation.images.camera2`` entry.
+    Returns None for non-v16 checkpoints.
+
+    The deploy path uses this both to enable the slot patch's camera2 read AND
+    to auto-adopt the 2-camera rename_map, so a deploy that forgot the frame-0
+    half cannot silently feed camera2 black frames.
     """
     if not path:
-        return False
+        return None
     tc: Path | None = None
     local = Path(path) / "train_config.json"
     if local.is_file():
@@ -121,18 +126,23 @@ def _detect_frame0(path: str | None) -> bool:
             tc = Path(hf_hub_download(path, "train_config.json"))
         except Exception:
             tc = None
-    if tc is not None and tc.is_file():
-        try:
-            return "_frame0" in tc.read_text(encoding="utf-8")
-        except Exception:
-            pass
-    return False
+    if tc is None or not tc.is_file():
+        return None
+    try:
+        data = json.loads(tc.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    rmap = data.get("rename_map") or {}
+    if isinstance(rmap, dict) and any("_frame0" in str(k) for k in rmap):
+        return {str(k): str(v) for k, v in rmap.items()}
+    return None
 
 
 _head = _detect_head(_policy_path_from_argv())
+_FRAME0_RENAME_MAP = _frame0_rename_map(_policy_path_from_argv())
 if _head == "slot":
     os.environ.setdefault("EVAL3_SLOT_LOSS_WEIGHT", "0.5")  # so apply() installs the patch
-    if _detect_frame0(_policy_path_from_argv()):
+    if _FRAME0_RENAME_MAP is not None:
         os.environ["EVAL3_SLOT_FRAME0"] = "1"
         logging.info("eval3_vla_deploy: v16 frame-0 checkpoint detected — EVAL3_SLOT_FRAME0=1")
     from eval3_smolvla_slot_bottleneck import apply as _eval3_slot_apply  # noqa: E402
@@ -627,18 +637,31 @@ def eval3_vla_deploy(cfg: Eval3VLADeployConfig) -> None:
         raise ValueError("--max_action_delta_deg must be >= 0; use 0 to disable.")
     if cfg.gripper_open_bias_threshold_deg < 0:
         raise ValueError("--gripper_open_bias_threshold_deg must be >= 0.")
+    # v16 frame-0 checkpoints need a 2-camera rename_map (front -> camera1,
+    # front_frame0 -> camera2) and policy.empty_cameras=1. The training
+    # rename_map is recorded in train_config.json; adopt it automatically so a
+    # deploy that omitted the frame-0 half does not silently feed camera2 black
+    # frames (the slot classifier would then read an empty pad).
+    is_v16 = _FRAME0_RENAME_MAP is not None
+    if is_v16 and "observation.images.front_frame0" not in cfg.rename_map:
+        logging.warning(
+            "v16 frame-0 checkpoint: --rename_map %s lacks the frame-0 camera; "
+            "adopting the training rename_map %s",
+            cfg.rename_map, _FRAME0_RENAME_MAP,
+        )
+        cfg.rename_map = dict(_FRAME0_RENAME_MAP)
     if cfg.rename_map.get("observation.images.front") != "observation.images.camera1":
         logging.warning(
-            "Eval3 single-camera deploy normally requires "
-            "--rename_map='{\"observation.images.front\":\"observation.images.camera1\"}'. "
-            "Current rename_map=%s",
+            "Eval3 deploy normally maps observation.images.front -> "
+            "observation.images.camera1. Current rename_map=%s",
             cfg.rename_map,
         )
+    expect_empty = 1 if is_v16 else 2
     empty_cameras = getattr(cfg.policy, "empty_cameras", None)
-    if empty_cameras != 2:
+    if empty_cameras != expect_empty:
         logging.warning(
-            "Eval3 SmolVLA single-camera checkpoints should use policy.empty_cameras=2; got %r.",
-            empty_cameras,
+            "Eval3 SmolVLA %s checkpoint expects policy.empty_cameras=%d; got %r.",
+            "v16 two-camera" if is_v16 else "single-camera", expect_empty, empty_cameras,
         )
 
     ds_meta = LeRobotDatasetMetadata(cfg.dataset_repo_id)

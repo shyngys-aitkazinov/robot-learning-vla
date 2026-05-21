@@ -165,6 +165,15 @@ def main() -> int:
     aliased = {rename_map.get(k, k): k for k in args.robot_camera_keys}
     print(f"  -> visible to policy  : {sorted(aliased.keys())}")
 
+    # v16 frame-0 checkpoints: eval3_vla_deploy.py injects a synthetic
+    # observation.images.*_frame0 key every step and the rename_map routes it to
+    # camera2. That camera is fed by the deploy script, NOT a robot camera — so a
+    # rename_map entry whose KEY ends in "_frame0" satisfies its target camera.
+    frame0_fed = {v for k, v in rename_map.items() if k.endswith("_frame0")}
+    if frame0_fed:
+        print(f"  -> v16 frame-0 fed    : {sorted(frame0_fed)} "
+              "(deploy-injected by eval3_vla_deploy.py, not a robot camera)")
+
     # Classify each policy-expected camera key.
     # - The "empty_camera_N" keys are synthetic black-pads added by SmolVLA's
     #   processor pipeline based on policy.empty_cameras; they NEVER need a
@@ -188,8 +197,8 @@ def main() -> int:
           f"the last {emp_count} named camera(s): {runtime_padded}")
     print(f"  -> {len(needed_real)} camera(s) need a real source:   {needed_real}")
 
-    missing_real = [k for k in needed_real if k not in aliased]
-    fed_real = [k for k in needed_real if k in aliased]
+    missing_real = [k for k in needed_real if k not in aliased and k not in frame0_fed]
+    fed_real = [k for k in needed_real if k in aliased or k in frame0_fed]
     cam_pass = (len(missing_real) == 0)
     if cam_pass:
         print(_green(f"\n  ✓ All {len(needed_real)} real camera key(s) are fed by a robot key after rename."))

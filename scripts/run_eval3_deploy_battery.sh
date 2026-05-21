@@ -33,6 +33,14 @@
 #   v10_fresh_v4balanced_new66_50k : eval3-vla-v10-smolvla-fresh-v4balanced-new66-50k (v4-balanced + new66, fresh, 50k)
 #   v10_h100_expert_20k : eval3-smolvla-v10-h100-expert-20k            (v10 H100 expert-only run, 20k snapshot)
 #
+# 2026-05-21 — v16 slot-bottleneck, TWO real cameras, default mode: raw:
+#   v16               : v16 real+synth 50k slot run (camera1=current frame,
+#                       camera2=frozen episode frame-0). NOT on the Hub —
+#                       POLICY_PATH defaults to the local /ephemeral checkpoint;
+#                       override with EVAL3_V16_CKPT=<path-or-hf-repo>. The v16
+#                       case arm sets rename_map {front->camera1,
+#                       front_frame0->camera2} + policy.empty_cameras=1.
+#
 # 2026-05-20 additions — pinned ID+OOD aux-head runs, default mode: raw:
 #   Fine-tuned (5k run, warm-started from v6-synth step15k, aux loss weight 0.5):
 #     v6_idood_aux_warm_500  : eval3-smolvla-3way-5k-b128-v6-pinned-idood-aux-warm15k-step500
@@ -301,6 +309,22 @@ case "$CHECKPOINT_NAME" in
     POLICY_PATH="RobotLearningVLA/eval3-smolvla-3way-5k-b128-slot-bottleneck-step2100"
     DATASET_REPO_ID="RobotLearningVLA/dataset_v3_synth_pinned_idood_taylor_swift_left_2"
     DEFAULT_MODE="raw"
+    ;;
+
+  # --- 2026-05-21: v16 slot-bottleneck, TWO real cameras ---
+  # camera1 = current frame, camera2 = frozen episode frame-0. v16 needs the
+  # 2-camera rename_map AND policy.empty_cameras=1 — both OVERRIDE the
+  # single-camera COMMON_ARGS (EXTRA_ARGS is applied last, so it wins).
+  # eval3_vla_deploy.py also auto-detects v16 and adopts the rename_map from
+  # train_config.json, so this is belt-and-suspenders.
+  v16)
+    POLICY_PATH="${EVAL3_V16_CKPT:-/ephemeral/outputs/train/eval3_v16_real_synth_50k/checkpoints/last/pretrained_model}"
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v4_taylor_left"
+    DEFAULT_MODE="raw"
+    EXTRA_ARGS+=(
+      --rename_map='{"observation.images.front":"observation.images.camera1","observation.images.front_frame0":"observation.images.camera2"}'
+      --policy.empty_cameras=1
+    )
     ;;
 
   flower_new66)
