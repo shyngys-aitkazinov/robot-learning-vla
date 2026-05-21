@@ -1,86 +1,216 @@
-# ETH Robot Learning Sandbox
+# Eval 3 — VLA robot: "Place the coke on `<celebrity>`"
 
-This repository is the **shared team project root** for Robot Learning / VLA work (GitHub: course code, configs, scripts). Day-to-day IDE workspace should be **this folder**, not a separate LeRobot fork — see [docs/WORKSPACE.md](docs/WORKSPACE.md) for how that relates to a local `LeRobot/` clone and how to avoid duplicated effort.
+> **Course:** ETH Robot Learning · **Hardware:** SO-101 follower arm · **Policy:** fine-tuned [SmolVLA](https://huggingface.co/lerobot/smolvla_base)
 
-A `uv`-managed Python environment for working with the
-[huggingface/lerobot](https://github.com/huggingface/lerobot) library against
-SO-100 / SO-101 hardware. Installs `lerobot` from PyPI into a local `.venv/`
-via `uv pip install`. Works on macOS / Apple Silicon (no CUDA) and Linux.
+This repository is the team's **complete Eval 3 submission**: a Vision-Language-Action
+(VLA) policy that drives an SO-101 robot arm to **pick up a Coke can and place it on
+the printed photo of the celebrity named in the language prompt**.
 
-## Eval 3 (VLA: place the coke on `<celebrity>`)
+It also doubles as the team's `lerobot` hardware sandbox (teleoperation, calibration,
+recording, replay). That reference material is kept in
+[Part 2 — Hardware & lerobot sandbox](#part-2--hardware--lerobot-sandbox-reference).
 
-The training + deploy stack for the Eval 3 task lives in
-`scripts/eval3_*` and `tools/eval3_*`. Foundation docs (scene spec,
-prompt protocol, dataset matrix, compute checklist, augmentation regimes)
-are under **[docs/eval3/](docs/eval3/README.md)**.
+---
 
-For a self-contained recipe to run the published checkpoint
-(`RobotLearningVLA/eval3-smolvla-3way-50k-v3-fresh`) on an SO-101 follower,
-follow **[docs/eval3/friend_deploy_handoff.md](docs/eval3/friend_deploy_handoff.md)**.
+## For graders — at a glance
 
-Common entry points (all require `EVAL3_INSTALL_SMOLVLA_DEPS=1 ./install.sh` first):
+| | |
+|---|---|
+| **Task** | Given the instruction *"Place the coke on `<celebrity>`"*, the arm grasps a Coke can and places it on the correct printed celebrity photo (one of three slots: left / middle / right). |
+| **Policy** | SmolVLA, fine-tuned on the team's **real SO-101 teleoperation data** (`dataset_v4_*`). The vision encoder + VLM language tower are **frozen** — only the action expert (plus a small slot head for v16) is trained. |
+| **Final models** | Two checkpoints on the Hugging Face Hub under `RobotLearningVLA/` — see [Final models](#final-models). |
+| **Run it** | One command — see [Deploy](#deploy-run-the-policy-on-the-arm). |
+| **Reproduce training** | See [Reproduce training](#reproduce-training). |
+| **Status** | ✅ Complete. `v16` is the deployed model. |
+
+---
+
+## The task
+
+The workspace has three printed celebrity photos laid out left, middle, and right, and
+one Coke can. The policy receives a single RGB camera stream, the arm's joint state, and
+a natural-language instruction such as `"Place the coke on Barack Obama"`. It must grasp
+the can and release it on top of the **named** celebrity's photo — so the policy has to
+actually *bind the language prompt to the right image region*, not just repeat one
+motion.
+
+The three "known" (in-distribution) identities are **Taylor Swift, Barack Obama, and
+Yann LeCun**. Out-of-distribution celebrities are also tested — see
+[Celebrity print sheets](#celebrity-print-sheets).
+
+## Approach
+
+We fine-tune **SmolVLA** on **real teleoperated SO-101 data only** (the `dataset_v4_*`
+corpus — 9 datasets, one per celebrity × slot position). The **vision encoder and VLM
+language tower are frozen**; we train only SmolVLA's action expert ("expert-only"
+fine-tuning, ~101 M of 452 M parameters). Freezing the perception stack keeps the
+pretrained celebrity knowledge intact and makes the fine-tune stable on a small robot
+dataset.
+
+### Final models
+
+Both models are on the Hugging Face Hub under `RobotLearningVLA/` and are wired into the
+deploy battery (`scripts/run_eval3_deploy_battery.sh`).
+
+| Model (HF repo) | What it is | Deploy entry |
+|---|---|---|
+| `eval3-vla-v6-smolvla-fresh-v4slots-expert-50k` | SmolVLA fine-tuned on the 9 real `dataset_v4_*` slot datasets, expert-only (frozen encoder), fresh from `lerobot/smolvla_base`, 50k steps. The baseline frozen-encoder VLA. | `run_eval3_deploy_battery.sh v4slots_expert` |
+| `eval3-smolvla-v16-pinsv5-step5k` | **The deployed model.** v16 *slot-bottleneck* variant — same frozen-encoder recipe plus an architecture change that forces the policy to read the target from the **language prompt**. | `run_eval3_deploy_battery.sh v16` |
+
+### Why v16 (the slot bottleneck)
+
+Earlier checkpoints scored well *offline* but, on the real arm, tended to **ignore the
+celebrity name** in the prompt. They had learned a shortcut: read the target from the
+*can's motion* after grasping it, rather than from the language. Cross-prompt action
+differences were < 1° on training frames — the prompt was effectively unused.
+
+**v16** removes that shortcut. A small slot classifier reads a **frozen frame-0 image**
+(captured at the start of the episode, fed through a dedicated second camera input) plus
+the language tokens, and commits to one of the three target slots for the whole episode.
+Because the frame-0 scene is static and the same 3-face layout appears with all three
+prompts, the only way the classifier can lower its loss is to actually use the language.
+A `LayerNorm` fix on the classifier inputs was needed to stop its attention softmax from
+saturating. Full write-up: **[docs/eval3/v16_playbook.md](docs/eval3/v16_playbook.md)**.
+
+---
+
+## Deploy: run the policy on the arm
+
+### Hardware prerequisites
+
+- SO-101 **follower** arm, calibrated — see [Calibration](#calibration).
+- External **7–12 V** supply to the motor bus, powered on. *USB alone does not power the
+  servos.*
+- One camera pointed at the workspace.
+- The celebrity photos printed and placed in the left / middle / right slots — see
+  [Celebrity print sheets](#celebrity-print-sheets).
+
+### One-time setup on the deploy machine
 
 ```bash
-# Inspect a Hub dataset (features, task histogram, sample tensor shapes)
-python tools/inspect_lerobot_dataset.py --repo-id RobotLearningVLA/taylor_swift_1
-
-# Print SmolVLA compatibility flags (rename_map + empty_cameras) for a given dataset
-python tools/eval3_smolvla_compat.py --repo-id RobotLearningVLA/taylor_swift_1
-
-# Fine-tune SmolVLA — single-dataset Swift baseline
-./scripts/run_eval3_smolvla_train.sh
-
-# Fine-tune SmolVLA — v8 corpus with gripper repair, arm-label smoothing, and visual aug
-#   (frame truncation + task aug + bg replacement + print-shuffle + repaired v2 gripper labels)
-./scripts/run_eval3_smolvla_aug_train.sh
-
-# Closed-loop deploy on real SO-101 (rename_map MUST match training)
-python scripts/eval3_vla_deploy.py \
-  --robot.type=so101_follower --robot.port=<tty> --robot.id=my_awesome_follower_arm \
-  --robot.cameras='{front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30}}' \
-  --dataset_repo_id=RobotLearningVLA/taylor_swift_1 \
-  --rename_map='{"observation.images.front":"observation.images.camera1"}' \
-  --policy.path=outputs/train/eval3_smolvla/checkpoints/<STEP>/pretrained_model \
-  --policy.device=mps --policy.num_steps=20 --policy.n_action_steps=25 \
-  --interpolation_multiplier=2 --action_smoothing_alpha=0.25 \
-  --max_action_delta_deg=6 --gripper_open_bias_deg=5 \
-  --gripper_open_bias_threshold_deg=20 \
-  --episode_time_s=20 --fps=30
-
-# Same command with --dry_run to verify the checkpoint loads without driving hardware
+EVAL3_INSTALL_SMOLVLA_DEPS=1 ./install.sh        # venv + lerobot + SmolVLA deps
+hf auth login --token <YOUR_TOKEN>               # needs read access to RobotLearningVLA/
+lerobot-find-port                                # discover the follower TTY port
 ```
 
-`scripts/train_eval3_smolvla.py` is the same CLI as `lerobot-train` but applies
-two import-time shims (`scripts/eval3_lerobot_shim.py` to keep `lerobot.policies.groot`
-importable with `transformers` installed; `scripts/eval3_concat_patch.py` to enable
-multi-dataset joint training via `EVAL3_EXTRA_REPOS=<repo1>,<repo2>,...`). **Do not
-invoke `lerobot-train` directly** in this venv once SmolVLA extras are installed —
-it will crash at policy import.
+### Deploy command (final v16 model)
 
-### ChArUco synthetic-on-real data (experimental)
-
-Three CLIs in `tools/eval3_charuco_*` cover an experimental pipeline aimed at
-runs 7–9 of Eval 3 (OOD celebrities). The plan is to record teleop episodes
-against printed ChArUco fiducial boards as celebrity stand-ins, then
-post-process to warp arbitrary celebrity images onto the board area while
-preserving the can on top. **Run the prereq probes first** — see
-[docs/eval3/charuco_pipeline.md](docs/eval3/charuco_pipeline.md) for the full
-workflow, caveats, and why this is experimental.
+**macOS** (the rig defaults — follower TTY + camera index — are baked in):
 
 ```bash
-# Print three identical A5 boards on A4 with crop marks (cv2.aruco already ships with the venv)
-for pos in left centre right; do
-  python tools/eval3_make_charuco_board.py --content-mm 130x180 \
-      --squares-x 5 --squares-y 7 --chroma-mm 60 \
-      --out outputs/eval3_charuco/board_${pos}
-done
-
-# Verify detection live against your recording camera
-python tools/eval3_charuco_check.py --camera-index 0
-
-# Preview the full compose pipeline (warp target -> HSV-key the can on top)
-python tools/eval3_charuco_compose.py --camera-index 0 --target-image celeb.jpg
+./scripts/run_eval3_deploy_battery.sh v16 --task='Place the coke on Taylor Swift'
 ```
+
+**Linux / CUDA** — override the port, camera index, and device:
+
+```bash
+FOLLOWER_TTY=/dev/ttyACM0 \
+CAM_IDX=0 \
+./scripts/run_eval3_deploy_battery.sh v16 \
+  --task='Place the coke on Taylor Swift' \
+  --episode_time_s=40 --fps=40 \
+  --policy.device=cuda
+```
+
+Notes:
+
+- The `v16` entry **defaults to the Hub model** `eval3-smolvla-v16-pinsv5-step5k` — no
+  `EVAL3_V16_CKPT` needed. Set `EVAL3_V16_CKPT=<path-or-repo>` only to deploy a different
+  checkpoint.
+- `FOLLOWER_TTY` / `CAM_IDX` default to the macOS dev rig — **override them on any other
+  machine**. Get the port from `lerobot-find-port`, the camera from
+  `lerobot-find-cameras opencv`.
+- On Linux you **must** append `--policy.device=cuda` — the battery hardcodes `mps`
+  (Apple Silicon), which does not exist on Linux. It is appended last, so it wins.
+- The `v16` entry sets the two-camera `rename_map` + `policy.empty_cameras=1` itself
+  (v16 uses a second camera input for the frame-0 image) — you do **not** add those.
+- Add `--display_data=true` to open a live Rerun viewer of the camera + state.
+- On Linux, give the user serial-port access once: `sudo usermod -aG dialout $USER`
+  (then re-login).
+
+### Pre-flight check (run before plugging in the arm)
+
+```bash
+python tools/eval3_check_deploy_command.py \
+  --policy-pretrained-path RobotLearningVLA/eval3-smolvla-v16-pinsv5-step5k \
+  --rename-map '{"observation.images.front":"observation.images.camera1","observation.images.front_frame0":"observation.images.camera2"}' \
+  --task 'Place the coke on Taylor Swift'
+```
+
+This validates the `rename_map`, camera keys, and task string. To load the checkpoint
+without driving hardware, append `--dry_run=true` to the deploy command.
+
+### Celebrity print sheets
+
+Print these in color and cut out the photos to set up the scene.
+
+| File | Contents |
+|---|---|
+| `in-distribution-eval-3.pdf` | Course-provided. The 3 in-distribution identities (Taylor Swift, Barack Obama, Yann LeCun), 15 photos. |
+| `out-distribution-eval-3-pins.pdf` | 10 out-of-distribution celebrities from the PINS dataset, one photo each, 2 per A4 page (~A5, sized to cut out). Built by `tools/eval3_build_ood_pins_pdf.py`. |
+| `datasets/out-distribution-eval-3/` | Wikimedia-sourced OOD portraits of the 3 in-distribution identities (different shoots / years). |
+
+---
+
+## Reproduce training
+
+Full SmolVLA fine-tunes need a CUDA GPU; see [docs/eval3/compute_budget.md](docs/eval3/compute_budget.md).
+
+```bash
+EVAL3_INSTALL_SMOLVLA_DEPS=1 ./install.sh
+
+# Baseline frozen-encoder VLA  ->  eval3-vla-v6-smolvla-fresh-v4slots-expert-50k
+./scripts/run_eval3_smolvla_v4slots_train.sh expert
+
+# v16 slot-bottleneck (final deployed recipe)  ->  eval3-smolvla-v16-...
+./scripts/run_eval3_smolvla_v16_real_data_slot_train.sh
+```
+
+Each launcher is a thin wrapper that exports env vars and calls
+`scripts/train_eval3_smolvla.py` (the `lerobot-train` CLI plus two import-time shims).
+Read each launcher's header comment for the exact corpus and knobs.
+
+Quick sanity checks (no GPU, no hardware):
+
+```bash
+python tools/inspect_lerobot_dataset.py --repo-id RobotLearningVLA/dataset_v4_taylor_left
+python tools/eval3_smolvla_compat.py --repo-id RobotLearningVLA/dataset_v4_taylor_left
+```
+
+## Repository map (Eval 3)
+
+- `scripts/run_eval3_deploy_battery.sh` — **the deploy entry point.** Named checkpoint
+  shortcuts (`v16`, `v4slots_expert`, …), bakes in the follower port + camera + deploy
+  guards. Run with `--help` for the full checkpoint list.
+- `scripts/eval3_vla_deploy.py` — closed-loop SmolVLA on the real SO-101.
+- `scripts/train_eval3_smolvla.py` — training entry (`lerobot-train` + import shims).
+- `scripts/run_eval3_smolvla_*train*.sh` — training launchers (one recipe each).
+- `tools/eval3_check_deploy_command.py` — pre-flight validator. Run before every deploy.
+- `tools/eval3_build_ood_pins_pdf.py` — builds `out-distribution-eval-3-pins.pdf`.
+- `tools/eval3_*.py` — offline audits, dataset inspectors, augmentation builders. None
+  touch hardware.
+- `docs/eval3/` — design and runbook docs. Highest-value:
+  [v16_playbook.md](docs/eval3/v16_playbook.md) (the final model),
+  [friend_deploy_handoff.md](docs/eval3/friend_deploy_handoff.md) (deploy recipe),
+  [hardware_eval_matrix.md](docs/eval3/hardware_eval_matrix.md) (trial protocol),
+  [tensor_contract.md](docs/eval3/tensor_contract.md) /
+  [prompt_protocol.md](docs/eval3/prompt_protocol.md) /
+  [scene_spec.md](docs/eval3/scene_spec.md) (train/deploy invariants).
+- `CLAUDE.md` — engineering notes for the agent working on this repo (load-order
+  gotchas, the deploy battery, augmentation env-var contract).
+
+---
+
+# Part 2 — Hardware & lerobot sandbox reference
+
+The rest of this file is the operational reference for the SO-101 hardware and the
+`lerobot` toolchain — calibration, teleoperation, recording, replay, and the Hugging
+Face dataset workflow. It applies whether or not you are running the Eval 3 policy.
+
+This is a `uv`-managed Python environment for the
+[huggingface/lerobot](https://github.com/huggingface/lerobot) library. `lerobot` is
+installed from PyPI into a local `.venv/` via `uv pip install`. Works on macOS / Apple
+Silicon (no CUDA) and on Linux.
 
 ## Quickstart
 
@@ -88,73 +218,59 @@ python tools/eval3_charuco_compose.py --camera-index 0 --target-image celeb.jpg
 ./install.sh
 ```
 
-That's it. The script is idempotent — re-run it any time to reconcile
-dependencies.
+The script is idempotent — re-run it any time to reconcile dependencies.
 
-## What `install.sh` does
+### What `install.sh` does
 
-1. Installs [`uv`](https://docs.astral.sh/uv/) if it's not on `PATH`.
-2. Creates `./.venv/` on the requested Python (`uv venv --python 3.12`) — or
-   reuses it if already present.
-3. Runs `uv pip install lerobot` into that venv. This is the install command
-   the team has verified working on macOS 14 / Apple Silicon; the more
-   declarative `uv sync` path tends to fail on this combo because of extras
-   that lack wheels (see [Platform caveats](#platform-caveats)).
-4. If `HF_TOKEN` is set in the environment, runs `hf auth login`.
+1. Installs [`uv`](https://docs.astral.sh/uv/) if it is not on `PATH`.
+2. Creates `./.venv/` on the requested Python (`uv venv --python 3.12`), or reuses it.
+3. Runs `uv pip install lerobot` into that venv (the install path verified on macOS 14 /
+   Apple Silicon — the declarative `uv sync` path fails there, see
+   [Platform caveats](#platform-caveats)).
+4. If `HF_TOKEN` is set, runs `hf auth login`.
 5. Ensures the calibration directories under
-   `~/.cache/huggingface/lerobot/calibration/{teleoperators,robots}/` exist.
+   `~/.cache/huggingface/lerobot/calibration/` exist.
 
-The script does **not** write `pyproject.toml` or `uv.lock`. The install is
-imperative, not declarative — re-running the script reinstalls exactly the
-same way against the latest PyPI lerobot.
+The install is **imperative, not declarative** — re-running reinstalls against the
+latest PyPI `lerobot`. It does not write `pyproject.toml` or `uv.lock`.
 
-## Configuration
+### Configuration
 
-All overrideable via env vars before running the script:
+Override via env vars before running the script:
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `PYTHON_VERSION` | `3.12` | Python minor version pin. Stay on `3.12` on macOS 14 — see [Platform caveats](#platform-caveats). |
-| `LEROBOT_SPEC` | `lerobot` | The package spec passed to `uv pip install`. Add extras here. |
+| `LEROBOT_SPEC` | `lerobot` | Package spec passed to `uv pip install`. Add extras here. |
 | `HF_TOKEN` | unset | If set, the script logs into Hugging Face automatically. |
-| `EVAL3_INSTALL_SMOLVLA_DEPS` | unset | When `=1`, additionally installs `transformers accelerate sentencepiece num2words` for SmolVLA fine-tuning + deploy. Required for the Eval 3 pipeline. |
+| `EVAL3_INSTALL_SMOLVLA_DEPS` | unset | When `=1`, also installs `transformers accelerate sentencepiece num2words`. **Required for the Eval 3 pipeline.** |
 
-Example with a few extras:
+If an extras install fails (the macOS 14 culprits are `intelrealsense` and
+`unitree_g1`), fall back to plain `LEROBOT_SPEC="lerobot"`.
 
-```bash
-LEROBOT_SPEC="lerobot[hardware,viz,feetech,dynamixel,kinematics,dev,test]" ./install.sh
-```
-
-If an extras install fails (the typical macOS 14 culprits are
-`intelrealsense` and `unitree_g1`), fall back to plain `LEROBOT_SPEC="lerobot"`.
-
-## Verifying the install
+### Verifying the install
 
 ```bash
 source .venv/bin/activate
 lerobot-find-port              # confirms motor adapters enumerate
 lerobot-find-cameras opencv    # confirms cameras enumerate
-hf auth whoami                 # confirms Hugging Face login (if you ran it)
+hf auth whoami                 # confirms Hugging Face login
 ```
 
 ## Hugging Face authentication
-
-If you skipped the `HF_TOKEN` env var, log in any time:
 
 ```bash
 hf auth login --token <YOUR_TOKEN> --add-to-git-credential
 ```
 
-Get a token at <https://huggingface.co/settings/tokens>. For pushing to an
-organization (e.g. `RobotLearningVLA`), use a fine-grained token scoped to that
-org with read+write on repos/datasets, and confirm membership at
-`https://huggingface.co/organizations/<org>/settings/members`.
+Get a token at <https://huggingface.co/settings/tokens>. For pushing to the
+`RobotLearningVLA` org, use a fine-grained token scoped to that org with read+write on
+repos/datasets.
 
-## Calibration files
+## Calibration
 
-Calibration tells lerobot the homing offset and joint range of every motor on
-each arm, in units of raw STS-3215 encoder counts (0–4095). The JSON files
-are written by `lerobot-calibrate` to:
+Calibration stores the homing offset and joint range of every motor on each arm, in raw
+STS-3215 encoder counts (0–4095). `lerobot-calibrate` writes JSON to:
 
 ```
 ~/.cache/huggingface/lerobot/calibration/
@@ -162,68 +278,47 @@ are written by `lerobot-calibrate` to:
   robots/so_follower/my_awesome_follower_arm.json        # follower arm
 ```
 
-The basenames (`my_awesome_leader_arm`, `my_awesome_follower_arm`) are the
-`--teleop.id` / `--robot.id` strings used on this machine — those are the
-**exact ids** you must pass to every later `lerobot-teleoperate` /
-`lerobot-record` / `lerobot-replay` call so the matching file is picked up.
-The directory layout (`so_leader` / `so_follower`) is fixed by lerobot — do
-**not** rename it.
+The basenames (`my_awesome_leader_arm`, `my_awesome_follower_arm`) are the `--teleop.id`
+/ `--robot.id` strings — pass the **exact same ids** to every later `lerobot-teleoperate`
+/ `lerobot-record` / `lerobot-replay` call so the matching file is picked up. The
+`so_leader` / `so_follower` directory layout is fixed by lerobot — do not rename it.
 
-Override the root with `HF_LEROBOT_CALIBRATION=/some/other/dir` or per-arm
-with `--teleop.calibration_dir=...` / `--robot.calibration_dir=...`.
-
-### Schema
-
-Each JSON is a mapping of motor name → encoder calibration:
+Each JSON maps motor name → encoder calibration:
 
 ```json
 {
-    "shoulder_pan":   { "id": 1, "drive_mode": 0, "homing_offset":  -872, "range_min": 1108, "range_max": 3041 },
-    "shoulder_lift":  { "id": 2, "drive_mode": 0, "homing_offset":   -86, "range_min":  849, "range_max": 3204 },
-    "elbow_flex":     { "id": 3, "drive_mode": 0, "homing_offset":  -208, "range_min":  967, "range_max": 3176 },
-    "wrist_flex":     { "id": 4, "drive_mode": 0, "homing_offset": -2015, "range_min":  813, "range_max": 3058 },
-    "wrist_roll":     { "id": 5, "drive_mode": 0, "homing_offset":  1795, "range_min":    0, "range_max": 4095 },
-    "gripper":        { "id": 6, "drive_mode": 0, "homing_offset": -1093, "range_min": 1892, "range_max": 3091 }
+    "shoulder_pan":  { "id": 1, "drive_mode": 0, "homing_offset":  -872, "range_min": 1108, "range_max": 3041 },
+    "wrist_roll":    { "id": 5, "drive_mode": 0, "homing_offset":  1795, "range_min":    0, "range_max": 4095 },
+    "gripper":       { "id": 6, "drive_mode": 0, "homing_offset": -1093, "range_min": 1892, "range_max": 3091 }
 }
 ```
 
-`wrist_roll` is the full-turn joint, so its range stays at 0–4095. The other
-five are bounded; their `range_min` / `range_max` come from physically moving
-the joint through its travel during calibration.
+`wrist_roll` is the full-turn joint, so its range stays 0–4095; the other five are
+bounded by their physical travel during calibration.
 
 ### Generating fresh calibrations
 
 ```bash
-# 1. Find each USB-serial port (unplug the cable when prompted).
-lerobot-find-port
+lerobot-find-port            # find each USB-serial port (unplug when prompted)
 
-# 2. Leader (teleop arm).
 lerobot-calibrate \
     --teleop.type=so101_leader \
     --teleop.port=/dev/tty.usbmodemXXXXXX \
-    --teleop.id=my_awesome_leader_arm     # use this exact id
+    --teleop.id=my_awesome_leader_arm
 
-# 3. Follower (robot arm).
 lerobot-calibrate \
     --robot.type=so101_follower \
     --robot.port=/dev/tty.usbmodemYYYYYY \
-    --robot.id=my_awesome_follower_arm    # use this exact id
+    --robot.id=my_awesome_follower_arm
 ```
 
-If you pick different ids, all subsequent `--teleop.id` / `--robot.id`
-arguments need to match — and the README examples below won't apply
-verbatim.
-
-The script walks you through (a) homing each joint at its midpoint and
-(b) moving each joint through its full range. After that the JSON is written
-and re-used on every subsequent `lerobot-teleoperate` / `lerobot-record` /
-`lerobot-replay` call that passes the same `--*.id`.
+The script walks you through homing each joint at its midpoint and moving it through its
+full range. Override the calibration root with `HF_LEROBOT_CALIBRATION=/some/dir`.
 
 ## Teleoperation
 
-`lerobot-teleoperate` streams positions from the leader arm to the follower
-arm in real time and (optionally) opens a [Rerun](https://www.rerun.io/)
-viewer for the camera + joint state.
+`lerobot-teleoperate` streams positions from the leader arm to the follower arm in real
+time, optionally opening a [Rerun](https://www.rerun.io/) viewer.
 
 ```bash
 lerobot-teleoperate \
@@ -237,19 +332,14 @@ lerobot-teleoperate \
     --display_data=true
 ```
 
-Notes:
-- `--robot.cameras` takes a draccus-style dict. Multiple cameras: add more
-  keys (e.g. `{ front: {...}, wrist: {...} }`).
-- `--display_data=false` if you do not want the Rerun viewer (saves a lot of
-  CPU on Apple Silicon — see [Troubleshooting](#troubleshooting)).
-- The leader / follower ports are the strings reported by
-  `lerobot-find-port`. They differ per laptop — do not copy these blindly.
+- `--robot.cameras` takes a draccus-style dict; add keys for more cameras.
+- `--display_data=false` skips the Rerun viewer (saves a lot of CPU on Apple Silicon).
+- Ports are per-laptop — read them from `lerobot-find-port`, don't copy blindly.
 
 ## Recording a dataset
 
-`lerobot-record` runs the same teleop loop, captures every frame of state +
-action + cameras, and (by default) uploads the result to the Hugging Face
-Hub when the session ends.
+`lerobot-record` runs the teleop loop, captures every frame of state + action + cameras,
+and (by default) uploads the result to the Hub at session end.
 
 ```bash
 lerobot-record \
@@ -260,232 +350,83 @@ lerobot-record \
     --teleop.type=so101_leader \
     --teleop.port=/dev/tty.usbmodem5B141136041 \
     --teleop.id=my_awesome_leader_arm \
-    --display_data=true \
-    --dataset.repo_id=RobotLearningVLA/banana_red_bowl_test_shyngys_1 \
-    --dataset.num_episodes=2 \
-    --dataset.single_task="Pick up the banana and put it into the red bowl" \
+    --dataset.repo_id=RobotLearningVLA/<name> \
+    --dataset.num_episodes=20 \
+    --dataset.single_task="Place the coke on Taylor Swift" \
     --dataset.streaming_encoding=true \
-    --dataset.encoder_threads=4 \
     --dataset.vcodec=h264_videotoolbox
 ```
 
-Key flags:
-
 | Flag | Meaning |
 |---|---|
-| `--dataset.repo_id` | Target `<org-or-user>/<name>` on the Hugging Face Hub. Use your org slug (e.g. `RobotLearningVLA`) to push under the org. **When a `--policy` is set (eval rollouts), the `<name>` must start with `eval_`** — lerobot raises `ValueError` otherwise. |
-| `--dataset.num_episodes` | Number of episodes to record in this session. |
+| `--dataset.repo_id` | Target `<org-or-user>/<name>` on the Hub. When a `--policy` is set (eval rollouts), `<name>` must start with `eval_`. |
+| `--dataset.num_episodes` | Episodes to record this session. |
 | `--dataset.single_task` | Language label attached to every frame (used by VLA policies). |
-| `--dataset.episode_time_s` | (Default 60) max seconds per episode. `→` ends early. |
-| `--dataset.reset_time_s` | (Default 60) seconds between episodes to reset the scene. `→` ends early. |
-| `--dataset.streaming_encoding` | Encode videos in a background thread as frames arrive (recommended). |
-| `--dataset.vcodec` | `h264_videotoolbox` on macOS (Apple HW accel), `libsvtav1` / `libx264` otherwise. |
-| `--dataset.push_to_hub` | (Default `true`) automatically upload at end. Set `false` to keep local-only. |
-| `--dataset.private` | (Default `false`) set `true` to create the Hub repo as private. |
-| `--resume` | **Top-level, not under `--dataset.`** Set `true` to append to an existing dataset (after a crash or to add more episodes). |
-| `--dataset.root` | Required together with `--resume=true` in lerobot 0.5.1+. Points at a writable working directory — must be **outside** `~/.cache/huggingface/lerobot/`, which lerobot now treats as a read-only Hub snapshot cache. |
+| `--dataset.episode_time_s` / `--dataset.reset_time_s` | (Default 60 each) max seconds per episode / scene reset; `→` ends early. |
+| `--dataset.streaming_encoding` | Encode videos in a background thread (recommended). |
+| `--dataset.vcodec` | `h264_videotoolbox` on macOS; `libsvtav1` / `libx264` otherwise. |
+| `--dataset.push_to_hub` | (Default `true`) upload at end. `false` keeps it local-only. |
+| `--resume` | **Top-level**, not under `--dataset.`. `true` appends to an existing dataset. |
+| `--dataset.root` | Required with `--resume=true`; a writable dir **outside** `~/.cache/huggingface/lerobot/`. |
 
-To recover from a mid-session crash and add the remaining episodes:
-
-```bash
-# 1. Seed a writable working dir with the existing cached episodes.
-mkdir -p ./datasets
-cp -r ~/.cache/huggingface/lerobot/<org>/<name> ./datasets/<name>
-
-# 2. Resume there.
-lerobot-record ... \
-    --resume=true \
-    --dataset.repo_id=<org>/<name> \
-    --dataset.root=./datasets/<name> \
-    --dataset.num_episodes=<N more episodes>
-```
-
-The final push-to-Hub still happens automatically at session end; the Hub dataset will have all original + new episodes.
-
-Keyboard shortcuts while recording:
-
-| Key | Action |
-|---|---|
-| `→` | advance to next phase (end episode / end reset early) |
-| `←` | re-record the current episode |
-| `Esc` | stop the whole session |
-
-On macOS, grant the terminal **Accessibility** permission (System Settings →
-Privacy & Security → Accessibility → add your terminal). Without it the keys
-fall through to the shell as raw escape codes (`^[[C` etc.).
+Keyboard shortcuts while recording: `→` advance phase, `←` re-record episode, `Esc`
+stop. On macOS, grant the terminal **Accessibility** permission (System Settings →
+Privacy & Security → Accessibility), or the keys leak through as raw escape codes.
 
 ## Replaying a dataset
 
-`lerobot-replay` reads an existing dataset from the Hub and drives the
-follower arm through the recorded actions — useful for sanity-checking that
-calibration + hardware still match what was recorded.
+`lerobot-replay` reads a dataset from the Hub and drives the follower arm through the
+recorded actions — a quick check that calibration + hardware still match.
 
 ```bash
 lerobot-replay \
     --robot.type=so101_follower \
     --robot.port=/dev/tty.usbmodem5B140317761 \
     --robot.id=my_awesome_follower_arm \
-    --dataset.repo_id=RobotLearningVLA/banana_red_bowl_test_shyngys_1 \
+    --dataset.repo_id=RobotLearningVLA/dataset_v4_taylor_left \
     --dataset.episode=0
 ```
 
-`--dataset.episode` picks one episode by index. Replay does not stream camera
-frames back — it only plays actions on the follower.
-
 ## Hugging Face datasets
 
-lerobot datasets live on the Hub under
-`https://huggingface.co/datasets/<org-or-user>/<name>`. Locally they cache to
-`~/.cache/huggingface/lerobot/<org-or-user>/<name>/`.
+lerobot datasets live at `https://huggingface.co/datasets/<org-or-user>/<name>` and cache
+locally to `~/.cache/huggingface/lerobot/<org-or-user>/<name>/`. The Eval 3 active corpus
+is `RobotLearningVLA/dataset_v4_{taylor,yann,barack}_{left,middle,right}`.
 
-### Org inventory (`RobotLearningVLA`)
-
-Current datasets in the team org, as of last check:
-
-| Dataset | Visibility | `v3.0` tag | Episodes | FPS | Robot |
-|---|---|---|---|---|---|
-| `RobotLearningVLA/banana_blue_bowl_eval1`  | private | yes | 20 | 30 | so_follower |
-| `RobotLearningVLA/banana_green_bowl_eval1` | private | yes | 20 | 30 | so_follower |
-| `RobotLearningVLA/banana_red_bowl_eval1`   | private | yes | 20 | 30 | so_follower |
-| `RobotLearningVLA/taylor_swift_1`          | public  | yes | 20 | 30 | so_follower |
-
-All datasets are `codebase_version=v3.0` and carry the matching `v3.0` git
-tag, so `lerobot-replay` / training can pull them directly. New datasets
-pushed by `lerobot-record` will need to be tagged the same way before they
-can be consumed — see
-[The version-tag requirement](#the-version-tag-requirement-for-replay--training).
-
-Refresh the inventory yourself any time:
+Pull a dataset without driving hardware:
 
 ```bash
 uv run python -c "
-from huggingface_hub import HfApi
-api = HfApi()
-for d in sorted(api.list_datasets(author='RobotLearningVLA'), key=lambda x: x.id):
-    refs = api.list_repo_refs(d.id, repo_type='dataset')
-    info = api.repo_info(d.id, repo_type='dataset')
-    print(f'{d.id}  private={info.private}  tags={[t.name for t in refs.tags] or \"NONE\"}')
+from lerobot.datasets.lerobot_dataset import LeRobotDataset
+ds = LeRobotDataset('RobotLearningVLA/dataset_v4_taylor_left')
+print(ds.num_episodes, 'episodes,', ds.num_frames, 'frames')
 "
 ```
 
-### Joining the org and pulling a dataset
+### The version-tag requirement
 
-1. Ask a `RobotLearningVLA` admin to invite your Hugging Face account at
-   <https://huggingface.co/organizations/RobotLearningVLA/settings/members>.
-   You need at least **read** access to pull, **write** access to push or
-   tag.
-2. Create a token at <https://huggingface.co/settings/tokens>. For
-   org-scoped access, prefer a **fine-grained** token with read+write on
-   repos/datasets in `RobotLearningVLA`.
-3. Log in locally:
-
-   ```bash
-   hf auth login --token <YOUR_TOKEN> --add-to-git-credential
-   hf auth whoami            # should list "orgs=...,RobotLearningVLA"
-   ```
-
-4. Download / cache a dataset. Three equivalent options:
-
-   ```bash
-   # (a) Replay drives the follower arm from a dataset — also caches it.
-   lerobot-replay --robot.type=so101_follower --robot.port=... \
-       --robot.id=my_awesome_follower_arm \
-       --dataset.repo_id=RobotLearningVLA/banana_green_bowl_eval1 \
-       --dataset.episode=0
-
-   # (b) Pre-download into ~/.cache/huggingface/lerobot/... without driving hardware.
-   uv run python -c "
-   from lerobot.datasets.lerobot_dataset import LeRobotDataset
-   ds = LeRobotDataset('RobotLearningVLA/banana_green_bowl_eval1')
-   print(ds.num_episodes, 'episodes,', ds.num_frames, 'frames')
-   "
-
-   # (c) Plain git-style fetch into an explicit dir (raw files, no lerobot parsing).
-   hf download RobotLearningVLA/banana_green_bowl_eval1 \
-       --repo-type dataset --local-dir ./datasets/banana_green_bowl_eval1
-   ```
-
-   (a) and (b) cache to `~/.cache/huggingface/lerobot/RobotLearningVLA/<name>/`
-   and are what `lerobot-*` commands read from. (c) is for poking at raw
-   parquet/MP4s.
-
-5. If you get `RevisionNotFoundError` (masked by `HfHubHTTPError missing
-   'response'`), the dataset isn't tagged yet — see below.
-
-### Pushing
-
-`lerobot-record` pushes automatically at the end of a session if
-`--dataset.push_to_hub=true` (the default). You must already be logged in
-(see [Hugging Face authentication](#hugging-face-authentication)) and a
-member of the org with write access on dataset repos.
-
-To push an existing local dataset manually:
+When loading a dataset, lerobot looks for a Hub git **tag** matching the dataset's
+`meta/info.json:codebase_version` (currently `v3.0`). A missing tag fails with
+`RevisionNotFoundError`, masked by a confusing `HfHubHTTPError missing 'response'` on
+`huggingface_hub` 1.x. Tag once per dataset after pushing:
 
 ```bash
-hf upload <org>/<name> ~/.cache/huggingface/lerobot/<org>/<name> --repo-type dataset
-```
-
-### The version-tag requirement (for replay / training)
-
-When loading a dataset, lerobot calls `get_safe_version()`, which looks for a
-Hub git **tag** matching the dataset's `meta/info.json:codebase_version`
-(typically `v3.0` for the current schema). If the tag is missing, replay /
-training fails with `RevisionNotFoundError`, masked by a confusing
-`TypeError: HfHubHTTPError missing 'response'` on `huggingface_hub` 1.x.
-
-Add the tag once per dataset after pushing:
-
-```python
 uv run python -c "from huggingface_hub import HfApi; HfApi().create_tag('<org>/<name>', tag='v3.0', repo_type='dataset')"
-```
-
-Pull the right tag string from the dataset itself if you're unsure:
-
-```python
-uv run python -c "
-from huggingface_hub import HfApi
-import json
-p = HfApi().hf_hub_download('<org>/<name>', 'meta/info.json', repo_type='dataset')
-print(json.load(open(p))['codebase_version'])
-"
-```
-
-### Inspecting a dataset
-
-```bash
-lerobot-dataset-viz --dataset.repo_id=<org>/<name>     # local viewer (rerun)
-hf repo files --repo-type dataset <org>/<name>         # list files on Hub
-```
-
-Dataset file layout (on Hub and in local cache):
-
-```
-<org>/<name>/
-  meta/
-    info.json                           # codebase_version, fps, robot_type, totals
-    stats.json                          # per-feature mean/std
-    tasks.parquet                       # task index
-    episodes/chunk-000/file-000.parquet # per-episode metadata
-  data/chunk-000/file-000.parquet       # state/action timeseries
-  videos/observation.images.<cam>/chunk-000/file-000.mp4
 ```
 
 ## Platform caveats
 
-`lerobot[all]` will **not** resolve on macOS 14 + Python 3.12 because two of its
-sub-extras require packages with no compatible wheel:
+`lerobot[all]` will **not** resolve on macOS 14 + Python 3.12 — two sub-extras lack
+compatible wheels:
 
 | Sub-extra | Blocking package | Why |
 |---|---|---|
-| `intelrealsense` | `pyrealsense2-macosx>=2.56` | only ships `macosx_15_0_arm64` wheel — needs macOS 15 |
-| `unitree_g1` | `onnxruntime==1.26.0` | only ships `cp313` macOS-arm wheel — needs Python 3.13 |
+| `intelrealsense` | `pyrealsense2-macosx>=2.56` | only ships a `macosx_15` wheel — needs macOS 15 |
+| `unitree_g1` | `onnxruntime==1.26.0` | only ships a `cp313` macOS-arm wheel — needs Python 3.13 |
 
-The default `LEROBOT_SPEC=lerobot` sidesteps both — bare lerobot installs
-fine. If you upgrade to macOS 15 *and* Python 3.13 you can add
-`intelrealsense,unitree_g1` back in (3.13 then brings its own build issues —
-e.g. `labmaze` needing Bazel — check upstream lerobot's
-[CONTRIBUTING.md](https://github.com/huggingface/lerobot/blob/main/CONTRIBUTING.md)
-for details).
+The default `LEROBOT_SPEC=lerobot` sidesteps both. Add extras à la carte if you need
+them. Full SmolVLA fine-tunes belong on Linux + CUDA; MPS on Apple Silicon is fine for
+inference / smoke runs.
 
 ## Other useful CLIs
 
@@ -496,57 +437,20 @@ lerobot-setup-motors …       # assign motor IDs 1–6 to a fresh Feetech daisy
 lerobot-info                 # print env / package versions
 ```
 
-All `lerobot-*` entry points are declared in lerobot's own `pyproject.toml`
-under `[project.scripts]` — `uv run lerobot-info` will list them after a
-successful `uv sync`.
-
 ## Troubleshooting
 
-**`FeetechMotorsBus motor check failed … Full found motor list: {}`**
-Almost always: external 7–12 V supply to the motor bus is unplugged / off, or
-the leader and follower ports are swapped. USB alone does not power the
-servos.
+| Symptom | Likely cause / fix |
+|---|---|
+| `FeetechMotorsBus motor check failed … found motor list: {}` | External 7–12 V supply to the motor bus is off, or leader/follower ports are swapped. USB alone does not power the servos. |
+| `FileExistsError … .cache/huggingface/lerobot/<org>/<name>` | A previous failed `lerobot-record` left an empty cache dir. Pick a new `--dataset.repo_id` or `rm -rf` the dir. |
+| `RevisionNotFoundError` / `HfHubHTTPError missing 'response'` | The dataset has no `v3.0` git tag — see [the version-tag requirement](#the-version-tag-requirement). |
+| Record / deploy loop runs at < 30 Hz | Drop `--display_data=true`, lower fps, or reduce camera resolution. On Apple Silicon, run the policy on MPS. |
+| `non-default argument 'backbone_cfg' follows default argument` at import | `lerobot.policies` imported before the shim. Enter via `scripts/train_eval3_smolvla.py` or `scripts/eval3_vla_deploy.py`, never `lerobot-train` directly. |
+| `ImportError: Package 'num2words' is required` | SmolVLA extras not installed: `EVAL3_INSTALL_SMOLVLA_DEPS=1 ./install.sh`. |
+| Deploy runs but the policy "ignores the celebrity" / grasps the wrong slot | Almost always a missing `--rename_map` — the policy sees black camera frames. Run `tools/eval3_check_deploy_command.py` first. |
 
-**`FileExistsError … /Users/<you>/.cache/huggingface/lerobot/<org>/<name>`**
-A previous failed `lerobot-record` left an empty cache dir. Either pick a new
-`--dataset.repo_id` or `rm -rf` the offending dir and retry.
+---
 
-**`RevisionNotFoundError` / `HfHubHTTPError missing 'response'` when replaying a dataset**
-The dataset has no version tag matching its `codebase_version`. Add one:
-
-```python
-from huggingface_hub import HfApi
-HfApi().create_tag("<org>/<dataset>", tag="v3.0", repo_type="dataset")
-```
-
-The exact tag string lives in `meta/info.json:codebase_version` of the dataset.
-
-**Recording warns `Record loop is running slower (… Hz) than the target FPS (30 Hz)`**
-On macOS / CPU-only this is usually `--display_data=true` (rerun streaming) or
-camera resolution. Try `--display_data=false`, lower fps, or smaller frames
-(`width=320 height=240`).
-
-## Files of note
-
-- `install.sh` — bootstrap script (see [What `install.sh` does](#what-installsh-does)).
-  Set `EVAL3_INSTALL_SMOLVLA_DEPS=1` to also pull in the SmolVLA transformers
-  stack.
-- `pyproject.toml` — minimal project metadata. The actual install is driven
-  by `install.sh` calling `uv pip install`, not by `uv sync`.
-- `.venv/` — provisioned by `install.sh` (git-ignored).
-- `scripts/camera.py` — quick OpenCV live-preview using
-  `lerobot.cameras.OpenCVCamera` (press `q` to quit).
-- `scripts/eval3_*` — Eval 3 training, deploy, and the import-time shims that
-  let SmolVLA coexist with the upstream GROOT policy stack. See
-  [Eval 3](#eval-3-vla-place-the-coke-on-celebrity) above and
-  [docs/eval3/README.md](docs/eval3/README.md).
-- `tools/eval3_*` — offline audits, mask / background pool builders,
-  visualisation, and synthetic OOD probes. None of these touch hardware.
-- `requirements-eval3-train.txt` — pointer file documenting the SmolVLA
-  extras (it is **not** a `pip install -r` target).
-- `outputs/` — git-ignored. Holds training checkpoints
-  (`outputs/train/<job>/checkpoints/<step>/pretrained_model/`), rollout logs
-  (`outputs/eval3_rollouts/`), and the augmentation assets
-  (`outputs/eval3_masks/`, `outputs/eval3_backgrounds/`).
-- `CLAUDE.md` — guidance for [Claude Code](https://claude.com/claude-code)
-  when iterating on this repo.
+`CLAUDE.md` holds the detailed engineering notes (Eval 3 pipeline architecture,
+load-order gotchas, the deploy battery, the augmentation env-var contract) for anyone —
+human or agent — iterating on this repo.

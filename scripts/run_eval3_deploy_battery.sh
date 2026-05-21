@@ -41,11 +41,11 @@
 #   Override train dir: EVAL3_V4SLOTS_EXPERT_TRAIN_DIR=outputs/train/...
 #
 # 2026-05-21 — v16 slot-bottleneck, TWO real cameras, default mode: raw:
-#   v16               : v16 real+synth 50k slot run (camera1=current frame,
-#                       camera2=frozen episode frame-0). NOT on the Hub —
-#                       POLICY_PATH defaults to the local /ephemeral checkpoint;
-#                       override with EVAL3_V16_CKPT=<path-or-hf-repo>. The v16
-#                       case arm sets rename_map {front->camera1,
+#   v16               : eval3-smolvla-v16-pinsv5-step5k (FINAL deployed model;
+#                       camera1=current frame, camera2=frozen episode frame-0).
+#                       POLICY_PATH defaults to that Hub repo; override with
+#                       EVAL3_V16_CKPT=<path-or-hf-repo> for other checkpoints.
+#                       The v16 case arm sets rename_map {front->camera1,
 #                       front_frame0->camera2} + policy.empty_cameras=1.
 #
 # 2026-05-20 additions — pinned ID+OOD aux-head runs, default mode: raw:
@@ -325,7 +325,7 @@ case "$CHECKPOINT_NAME" in
   # eval3_vla_deploy.py also auto-detects v16 and adopts the rename_map from
   # train_config.json, so this is belt-and-suspenders.
   v16)
-    POLICY_PATH="${EVAL3_V16_CKPT:-/ephemeral/outputs/train/eval3_v16_real_synth_50k/checkpoints/last/pretrained_model}"
+    POLICY_PATH="${EVAL3_V16_CKPT:-RobotLearningVLA/eval3-smolvla-v16-pinsv5-step5k}"
     DATASET_REPO_ID="RobotLearningVLA/dataset_v4_taylor_left"
     DEFAULT_MODE="raw"
     EXTRA_ARGS+=(

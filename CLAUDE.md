@@ -19,6 +19,14 @@ Two things in one tree:
    pre-loads `lerobot.policies.groot.*` modules with a shim — both are
    load-order-sensitive, see below.
 
+**Project status — Eval 3 is complete.** The approach: SmolVLA fine-tuned on
+real `dataset_v4_*` teleop data with the vision encoder + language tower
+**frozen** (expert-only). Two final models on the Hub under `RobotLearningVLA/`:
+`eval3-vla-v6-smolvla-fresh-v4slots-expert-50k` (baseline frozen-encoder VLA)
+and `eval3-smolvla-v16-pinsv5-step5k` (the **deployed** model — the v16
+slot-bottleneck variant; deploy with `run_eval3_deploy_battery.sh v16`). See
+`README.md` (TA-facing writeup) and `docs/eval3/v16_playbook.md`.
+
 Platform targets:
 - **macOS 14 / Apple Silicon / Python 3.12** — primary dev box for teleop /
   record / replay and for small SmolVLA fine-tunes (MPS). The `eval3_*`
@@ -51,8 +59,8 @@ python scripts/train_eval3_bc_overfit.py --steps 1500    # tiny BC, pipeline gat
 ./scripts/run_eval3_smolvla_aug_train.sh                 # 3-celeb + full augmentation stack
 python scripts/train_eval3_smolvla.py ...                # raw entry — same flags as `lerobot-train`
 
-# Eval 3 — closed-loop deploy on SO-101 (see docs/eval3/friend_deploy_handoff.md)
-./scripts/run_eval3_deploy_battery.sh v8                 # friend-recipe deploy wrapper (preferred)
+# Eval 3 — closed-loop deploy on SO-101 (see docs/eval3/v16_playbook.md)
+./scripts/run_eval3_deploy_battery.sh v16 --task='Place the coke on Taylor Swift'   # final model
 ./scripts/run_eval3_deploy_battery.sh v6_synth_15k --task='Place the coke on Barack Obama'
 python scripts/eval3_vla_deploy.py --policy.path=... --rename_map='...' --task='...' --episode_time_s=20
 python scripts/eval3_vla_deploy.py ... --dry_run         # load checkpoint without driving hardware
@@ -73,19 +81,25 @@ receives black frames and silently fails (see `docs/eval3/friend_deploy_handoff.
 The primary deploy entry. Wraps `scripts/eval3_vla_deploy.py` with the
 follower TTY + camera index baked in for Shyngys's rig
 (`FOLLOWER_TTY=/dev/tty.usbmodem5B140317761`, `CAM_IDX=0` — override per-run
-via env vars). Selects one of 9 named checkpoints and applies the
-friend-recipe deploy guards by default. Pass any extra `eval3_vla_deploy.py`
-flags after the checkpoint name.
+via env vars). Selects a named checkpoint and applies the friend-recipe
+deploy guards by default. Pass any extra `eval3_vla_deploy.py` flags after the
+checkpoint name. The table below is the curated shortlist; `--help` prints the
+full inventory (v6_synth/v10/aux/slot intermediate snapshots, etc.).
 
 | Name | Repo | Default biases |
 |---|---|---|
-| `v8` | `eval3-vla-v8-gripper-repair-smooth-50k` (3-way, current best) | ON |
+| `v16` | `eval3-smolvla-v16-pinsv5-step5k` — **final deployed model**; v16 slot-bottleneck, two cameras (sets the 2-cam `rename_map` + `empty_cameras=1` itself) | **OFF** (raw-policy) |
+| `v4slots_expert` | `eval3-vla-v6-smolvla-fresh-v4slots-expert-50k` — baseline frozen-encoder VLA on 9× real `dataset_v4_*` | **OFF** (raw-policy) |
+| `v8` | `eval3-vla-v8-gripper-repair-smooth-50k` (3-way, pre-v16 best) | ON |
 | `v6_combined` | `eval3-vla-v6-smolvla-fresh-combined88-50k` | ON |
 | `v6_new` | `eval3-vla-v6-smolvla-fresh-new66-50k` | ON |
 | `v7_d` | `eval3-vla-v7-D-obama-only-10k` (Obama-only — use only with Obama prompt) | ON |
 | `v6_synth_25k` / `v6_synth_15k` | `eval3-smolvla-3way-25k-b128-v6-synth-step{25k,15k}` (ChArUco-synth) | **OFF** (raw-policy) |
 | `v9_charuco` / `v9_new66_charuco` | `eval3-vla-v9-smolvla-fresh-{charuco,new66-charuco}-50k` | **OFF** (raw-policy) |
 | `flower_new66` | FlowerVLA — **exits with error**; deploy script is SmolVLA-only |
+
+`v16` defaults `POLICY_PATH` to the Hub repo `eval3-smolvla-v16-pinsv5-step5k`;
+override with `EVAL3_V16_CKPT=<path-or-repo>` to deploy a different checkpoint.
 
 The four friend-recipe **deploy guards** (set in `COMMON_ARGS`) are the
 difference between "raw policy" and "deployable":
