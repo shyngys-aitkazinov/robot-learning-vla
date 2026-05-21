@@ -34,6 +34,11 @@
 #   v10_h100_expert_20k : eval3-smolvla-v10-h100-expert-20k            (v10 H100 expert-only run, 20k snapshot)
 #   v4slots_full        : eval3-vla-v6-smolvla-fresh-v4slots-50k       (9× dataset_v4_* real slots, full FT)
 #   v4slots_expert      : eval3-vla-v6-smolvla-fresh-v4slots-expert-50k (9× dataset_v4_* real slots, expert FT)
+#   v4slots_expert_10k  : local step 010000 (Brev train dir; not on Hub)
+#   v4slots_expert_20k  : local step 020000
+#   v4slots_expert_30k  : local step 030000
+#   v4slots_expert_40k  : local step 040000
+#   Override train dir: EVAL3_V4SLOTS_EXPERT_TRAIN_DIR=outputs/train/...
 #
 # 2026-05-21 — v16 slot-bottleneck, TWO real cameras, default mode: raw:
 #   v16               : v16 real+synth 50k slot run (camera1=current frame,
@@ -337,6 +342,24 @@ case "$CHECKPOINT_NAME" in
     ;;
   v4slots_expert)
     POLICY_PATH="RobotLearningVLA/eval3-vla-v6-smolvla-fresh-v4slots-expert-50k"
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v4_taylor_left"
+    DEFAULT_MODE="raw"
+    ;;
+  v4slots_expert_10k|v4slots_expert_20k|v4slots_expert_30k|v4slots_expert_40k)
+    _V4_EXPERT_TRAIN="${EVAL3_V4SLOTS_EXPERT_TRAIN_DIR:-outputs/train/eval3-vla-v6-smolvla-fresh-v4slots-expert-50k}"
+    case "$CHECKPOINT_NAME" in
+      v4slots_expert_10k) _V4_STEP=010000 ;;
+      v4slots_expert_20k) _V4_STEP=020000 ;;
+      v4slots_expert_30k) _V4_STEP=030000 ;;
+      v4slots_expert_40k) _V4_STEP=040000 ;;
+    esac
+    POLICY_PATH="${_V4_EXPERT_TRAIN}/checkpoints/${_V4_STEP}/pretrained_model"
+    if [[ ! -f "${POLICY_PATH}/model.safetensors" ]]; then
+      echo "ERROR: missing local checkpoint: ${POLICY_PATH}/model.safetensors" >&2
+      echo "       Run: ./scripts/fetch_eval3_v4slots_expert_checkpoints.sh" >&2
+      echo "       Or set EVAL3_V4SLOTS_EXPERT_TRAIN_DIR to your train output dir." >&2
+      exit 2
+    fi
     DATASET_REPO_ID="RobotLearningVLA/dataset_v4_taylor_left"
     DEFAULT_MODE="raw"
     ;;
