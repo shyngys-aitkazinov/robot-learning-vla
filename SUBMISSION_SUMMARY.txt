@@ -1,0 +1,11 @@
+We address Eval 3 (VLA): place a Coke can on a named celebrity board within 20 seconds using one front camera and language conditioning, without cloud inference at deploy time.
+
+Data: We teleoperated an SO-101 follower and published LeRobot v3 datasets on Hugging Face under RobotLearningVLA. For in-distribution evaluation we recorded nine corpora (Taylor Swift, Yann LeCun, Barack Obama × left/middle/right table slots) as dataset_v4_* repos (~34k frames). Task strings follow the canonical template "Place the coke on <Full Name>". OOD celebrities (e.g. Lionel Messi, Tom Cruise, Leonardo DiCaprio) were collected and trained by a teammate with a pinned synthetic board pipeline.
+
+Training: Our main policy fine-tunes SmolVLA (lerobot/smolvla_base) with vision frozen and train_expert_only enabled (v4slots_expert), joint-trained across all nine v4 slot datasets with placement-aware episode truncation, light visual augmentation, and no background/print shuffle. We trained 50k steps on CUDA (batch 16) and selected the 50k checkpoint via offline sweep and hardware scorecards (36/45 successes on a 3×3 celebrity×slot matrix).
+
+Deploy (in-distribution): Single real camera remapped to camera1 with two empty camera slots; raw deploy without gripper/smoothing guards to match training. Interactive demo CLI loads the policy once; the operator types the full instruction per rollout.
+
+Deploy (OOD): A separate v16 slot-bottleneck checkpoint (eval3-smolvla-v16-pinsv5-step5k) uses two logical cameras (current frame + frozen episode frame-0) and is launched via deploy battery, not the demo CLI.
+
+Checkpoints and data are on Hugging Face; the submission repo zip includes run scripts and README instructions to download them with HF_TOKEN.

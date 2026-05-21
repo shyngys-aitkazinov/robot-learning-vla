@@ -10,6 +10,25 @@ It also doubles as the team's `lerobot` hardware sandbox (teleoperation, calibra
 recording, replay). That reference material is kept in
 [Part 2 — Hardware & lerobot sandbox](#part-2--hardware--lerobot-sandbox-reference).
 
+**Teammate submitting the form?** Start with **[TEAMMATE_SUBMIT.md](TEAMMATE_SUBMIT.md)** and **[HANDOFF_READY.txt](HANDOFF_READY.txt)**.
+
+## Course submission (Project 1 — VLA)
+
+**Deadline:** Friday 22.05.2026 23:59. See **[docs/PROJECT_SUBMISSION.md](docs/PROJECT_SUBMISSION.md)** for the full checklist, Azure upload commands, and video requirements.
+
+| Run script | Task |
+|------------|------|
+| [`run_eval3_in_distribution.sh`](run_eval3_in_distribution.sh) | Taylor Swift, Yann LeCun, Barack Obama — `v4slots_expert` |
+| [`run_eval3_ood.sh`](run_eval3_ood.sh) | OOD celebrities — `eval3-smolvla-v16-pinsv5-step5k` |
+
+Form summary (under 300 words): paste from [`SUBMISSION_SUMMARY.txt`](SUBMISSION_SUMMARY.txt).
+
+```bash
+EVAL3_INSTALL_SMOLVLA_DEPS=1 ./install.sh
+export FOLLOWER_TTY=/dev/ttyACM0   # or Mac usbmodem port
+./run_eval3_in_distribution.sh "Place the coke on Taylor Swift"
+```
+
 ---
 
 ## For graders — at a glance

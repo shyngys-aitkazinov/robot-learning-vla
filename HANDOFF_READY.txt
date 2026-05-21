@@ -1,0 +1,25 @@
+HANDOFF CHECKLIST — Rakhmatillokhon → teammate submits
+===============================================
+
+DONE (in repo):
+  [x] SUBMISSION_SUMMARY.txt          → paste into Google Form
+  [x] run_eval3_in_distribution.sh    → Taylor / Yann / Obama
+  [x] run_eval3_ood.sh                → OOD (v16 pinsv5)
+  [x] submission_videos/              → 2 WhatsApp MP4s (~20 MB total)
+  [x] TEAMMATE_SUBMIT.md              → step-by-step for submitter
+  [x] submission_DATASETS.txt         → what goes in data zip
+  [x] scripts/build_all_submission_zips.sh
+
+TEAMMATE STILL DOES:
+  [ ] Set TEAM=teamXX
+  [ ] git pull this repo
+  [ ] huggingface-cli login
+  [ ] ./scripts/build_all_submission_zips.sh --with-checkpoints  (or without)
+  [ ] Build TEAM-data.zip (datasets — see submission_DATASETS.txt)
+  [ ] Upload 3 zips via course form curl commands
+  [ ] Fill Google Form + check 3 upload boxes
+  [ ] Confirm video filenames / re-record if <3 rollouts per eval
+
+OPTIONAL RENAME VIDEOS (before zip):
+  submission_videos/eval3_video_01_36s.mp4  → eval3_id_....mp4
+  submission_videos/eval3_video_02_75s.mp4  → eval3_id_....mp4 or eval3_ood_....mp4

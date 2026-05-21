@@ -1,0 +1,24 @@
+# Datasets to include in <TEAM>-data.zip (Eval 3 teleop / training)
+
+Primary in-distribution corpora (v4slots expert training):
+  RobotLearningVLA/dataset_v4_taylor_left
+  RobotLearningVLA/dataset_v4_taylor_middle
+  RobotLearningVLA/dataset_v4_taylor_right
+  RobotLearningVLA/dataset_v4_yann_left
+  RobotLearningVLA/dataset_v4_yann_middle
+  RobotLearningVLA/dataset_v4_yann_right
+  RobotLearningVLA/dataset_v4_barack_left
+  RobotLearningVLA/dataset_v4_barack_middle
+  RobotLearningVLA/dataset_v4_barack_right
+
+OOD / teammate training (confirm with friend which repos to include):
+  RobotLearningVLA/eval3-smolvla-v16-pinsv5-step5k  (model only — datasets TBD)
+
+Legacy / earlier corpora (include if course expects full team data history):
+  RobotLearningVLA/taylor_swift_1
+  RobotLearningVLA/yann_lecun_1
+  RobotLearningVLA/barack_obama_1
+  (plus any dataset_v2_* / synth repos your team recorded)
+
+Export: snapshot Hub datasets to disk, or zip ~/.cache/huggingface/lerobot/<org>/<name> after a full pull.
+All datasets need Hub tag v3.0 matching meta/info.json.
