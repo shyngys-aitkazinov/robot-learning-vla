@@ -149,11 +149,11 @@ def _parse_args() -> argparse.Namespace:
 
 def _repo_identity_position(repo_id: str) -> tuple[str, str]:
     lower = repo_id.lower()
-    if "barack_obama" in lower:
+    if "barack_obama" in lower or "dataset_v4_barack" in lower:
         identity = "barack_obama"
-    elif "taylor_swift" in lower:
+    elif "taylor_swift" in lower or "dataset_v4_taylor" in lower:
         identity = "taylor_swift"
-    elif "yann_lecun" in lower:
+    elif "yann_lecun" in lower or "dataset_v4_yann" in lower:
         identity = "yann_lecun"
     else:
         raise ValueError(f"Could not infer identity from repo_id={repo_id!r}")
