@@ -1,0 +1,150 @@
+{
+  "dataset": "Eval 3 Out-of-Distribution (OOD) — PINS celebrity photos",
+  "source": "Top-N celebrities from the curated PINS global-recognizability ranking (build_pins_top30.py). Photo per celebrity = the largest-pixel-area image among that celebrity's top-10 quality-ranked PINS images. Images used as-is: no re-crop, no upscale. PINS images are low resolution (<= ~564x802 px) so they print soft at A5 size — an accepted tradeoff.",
+  "source_url": "https://www.kaggle.com/datasets/hereisburak/pins-face-recognition",
+  "source_json": "datasets/pins-face-recognition-top30-quality.json",
+  "root": "datasets/out-distribution-eval-3-pins",
+  "generated_at": "2026-05-21T06:46:02+00:00",
+  "pdf": "out-distribution-eval-3-pins.pdf",
+  "pdf_layout": "A4 portrait, 300 DPI, 2 photos per page (each ~A5), styled after in-distribution-eval-3.pdf",
+  "total_celebrities": 10,
+  "total_images": 10,
+  "held_out_identities_target": [
+    "Barack Obama",
+    "Taylor Swift",
+    "Yann LeCun"
+  ],
+  "selection_rationale": "OOD identities for Eval 3 — none overlap the three TOY identities. Picked for global recognizability so the SmolVLM backbone is most likely to recognise them zero-shot.",
+  "celebrities": [
+    {
+      "name": "Cristiano Ronaldo",
+      "slug": "cristiano_ronaldo",
+      "rank": 1,
+      "category": "athlete",
+      "held_out": false,
+      "source_pins_image": "datasets/105_classes_pins_dataset/pins_Cristiano Ronaldo/Cristiano Ronaldo168_1306.jpg",
+      "source_resolution_px": [
+        564,
+        668
+      ],
+      "pdf_image": "datasets/out-distribution-eval-3-pins/cristiano_ronaldo/cristiano_ronaldo_01.jpg"
+    },
+    {
+      "name": "Lionel Messi",
+      "slug": "lionel_messi",
+      "rank": 2,
+      "category": "athlete",
+      "held_out": false,
+      "source_pins_image": "datasets/105_classes_pins_dataset/pins_Lionel Messi/Lionel Messi50_3163.jpg",
+      "source_resolution_px": [
+        302,
+        320
+      ],
+      "pdf_image": "datasets/out-distribution-eval-3-pins/lionel_messi/lionel_messi_01.jpg"
+    },
+    {
+      "name": "Rihanna",
+      "slug": "rihanna",
+      "rank": 3,
+      "category": "music",
+      "held_out": false,
+      "source_pins_image": "datasets/105_classes_pins_dataset/pins_Rihanna/Rihanna19_4007.jpg",
+      "source_resolution_px": [
+        365,
+        387
+      ],
+      "pdf_image": "datasets/out-distribution-eval-3-pins/rihanna/rihanna_01.jpg"
+    },
+    {
+      "name": "Elon Musk",
+      "slug": "elon_musk",
+      "rank": 4,
+      "category": "tech",
+      "held_out": false,
+      "source_pins_image": "datasets/105_classes_pins_dataset/pins_elon musk/elon musk157_1557.jpg",
+      "source_resolution_px": [
+        437,
+        463
+      ],
+      "pdf_image": "datasets/out-distribution-eval-3-pins/elon_musk/elon_musk_01.jpg"
+    },
+    {
+      "name": "Leonardo DiCaprio",
+      "slug": "leonardo_dicaprio",
+      "rank": 5,
+      "category": "actor",
+      "held_out": false,
+      "source_pins_image": "datasets/105_classes_pins_dataset/pins_Leonardo DiCaprio/Leonardo DiCaprio239_2594.jpg",
+      "source_resolution_px": [
+        437,
+        462
+      ],
+      "pdf_image": "datasets/out-distribution-eval-3-pins/leonardo_dicaprio/leonardo_dicaprio_01.jpg"
+    },
+    {
+      "name": "Tom Cruise",
+      "slug": "tom_cruise",
+      "rank": 6,
+      "category": "actor",
+      "held_out": false,
+      "source_pins_image": "datasets/105_classes_pins_dataset/pins_Tom Cruise/Tom Cruise204_1109.jpg",
+      "source_resolution_px": [
+        365,
+        387
+      ],
+      "pdf_image": "datasets/out-distribution-eval-3-pins/tom_cruise/tom_cruise_01.jpg"
+    },
+    {
+      "name": "Dwayne Johnson",
+      "slug": "dwayne_johnson",
+      "rank": 7,
+      "category": "actor",
+      "held_out": false,
+      "source_pins_image": "datasets/105_classes_pins_dataset/pins_Dwayne Johnson/Dwayne Johnson52_1676.jpg",
+      "source_resolution_px": [
+        550,
+        668
+      ],
+      "pdf_image": "datasets/out-distribution-eval-3-pins/dwayne_johnson/dwayne_johnson_01.jpg"
+    },
+    {
+      "name": "Robert Downey Jr",
+      "slug": "robert_downey_jr",
+      "rank": 8,
+      "category": "actor",
+      "held_out": false,
+      "source_pins_image": "datasets/105_classes_pins_dataset/pins_Robert Downey Jr/Robert Downey Jr206_4198.jpg",
+      "source_resolution_px": [
+        302,
+        320
+      ],
+      "pdf_image": "datasets/out-distribution-eval-3-pins/robert_downey_jr/robert_downey_jr_01.jpg"
+    },
+    {
+      "name": "Scarlett Johansson",
+      "slug": "scarlett_johansson",
+      "rank": 9,
+      "category": "actor",
+      "held_out": false,
+      "source_pins_image": "datasets/105_classes_pins_dataset/pins_scarlett johansson/scarlett johansson94_4083.jpg",
+      "source_resolution_px": [
+        527,
+        558
+      ],
+      "pdf_image": "datasets/out-distribution-eval-3-pins/scarlett_johansson/scarlett_johansson_01.jpg"
+    },
+    {
+      "name": "Jennifer Lawrence",
+      "slug": "jennifer_lawrence",
+      "rank": 10,
+      "category": "actor",
+      "held_out": false,
+      "source_pins_image": "datasets/105_classes_pins_dataset/pins_Jennifer Lawrence/Jennifer Lawrence174_1647.jpg",
+      "source_resolution_px": [
+        365,
+        387
+      ],
+      "pdf_image": "datasets/out-distribution-eval-3-pins/jennifer_lawrence/jennifer_lawrence_01.jpg"
+    }
+  ]
+}
