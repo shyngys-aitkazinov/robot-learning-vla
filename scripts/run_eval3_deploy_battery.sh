@@ -32,6 +32,8 @@
 #   v10_balanced_new66_10k : eval3-smolvla-v10-balanced-new66-10k      (v4-balanced synth + new66 real)
 #   v10_fresh_v4balanced_new66_50k : eval3-vla-v10-smolvla-fresh-v4balanced-new66-50k (v4-balanced + new66, fresh, 50k)
 #   v10_h100_expert_20k : eval3-smolvla-v10-h100-expert-20k            (v10 H100 expert-only run, 20k snapshot)
+#   v4slots_full        : eval3-vla-v6-smolvla-fresh-v4slots-50k       (9× dataset_v4_* real slots, full FT)
+#   v4slots_expert      : eval3-vla-v6-smolvla-fresh-v4slots-expert-50k (9× dataset_v4_* real slots, expert FT)
 #
 # 2026-05-21 — v16 slot-bottleneck, TWO real cameras, default mode: raw:
 #   v16               : v16 real+synth 50k slot run (camera1=current frame,
@@ -327,6 +329,18 @@ case "$CHECKPOINT_NAME" in
     )
     ;;
 
+  # --- v4 real slot corpora (50k, May 2026) ---
+  v4slots_full)
+    POLICY_PATH="RobotLearningVLA/eval3-vla-v6-smolvla-fresh-v4slots-50k"
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v4_taylor_left"
+    DEFAULT_MODE="raw"
+    ;;
+  v4slots_expert)
+    POLICY_PATH="RobotLearningVLA/eval3-vla-v6-smolvla-fresh-v4slots-expert-50k"
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v4_taylor_left"
+    DEFAULT_MODE="raw"
+    ;;
+
   flower_new66)
     cat >&2 <<'EOF'
 ERROR: flower_new66 is a FlowerVLA model and cannot be deployed via
@@ -373,7 +387,7 @@ COMMON_ARGS=(
   --gripper_open_bias_threshold_deg=20
   --episode_time_s=20
   --fps=30
-  --display_data=true
+  --display_data=false
 )
 
 if [[ "$DEPLOY_MODE" == "raw" ]]; then

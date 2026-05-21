@@ -449,22 +449,24 @@ def apply_concat_patch() -> None:
 
             def _slug_from_repo(repo: str) -> str:
                 """Map repo_id -> celebrity slug. Both old (taylor_swift_1) and new
-                (dataset_v2_taylor_swift_left_1) variants resolve correctly because
-                the substring match still hits."""
+                (dataset_v2_taylor_swift_left_1, dataset_v4_taylor_left) resolve."""
                 rl = repo.lower()
-                if "taylor_swift" in rl:
+                if "taylor_swift" in rl or "dataset_v4_taylor" in rl:
                     return "swift"
-                if "yann_lecun" in rl:
+                if "yann_lecun" in rl or "dataset_v4_yann" in rl:
                     return "lecun"
-                if "barack_obama" in rl:
+                if "barack_obama" in rl or "dataset_v4_barack" in rl:
                     return "obama"
                 return ""
 
             def _is_new_data(repo: str) -> bool:
-                """True for dataset_v2_* repos. They record [home -> place -> home]
-                trajectories and need placement truncation. Old data already ends
-                at the placement pose and must NOT be truncated."""
-                return "dataset_v2" in repo.lower()
+                """True for dataset_v2_* and dataset_v4_* repos. They record
+                [home -> place -> home] trajectories and need placement truncation.
+                Old data already ends at the placement pose and must NOT be truncated."""
+                rl = repo.lower()
+                return "dataset_v2" in rl or (
+                    "dataset_v4_" in rl and "dataset_v4_synth" not in rl
+                )
 
             def _is_synth_data(repo: str) -> bool:
                 """True for synthetic ChArUco-derived repos (``dataset_v3_synth_*``
