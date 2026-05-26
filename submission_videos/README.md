@@ -1,5 +1,8 @@
 # Submission videos (Eval 3)
 
+These MP4s are tracked in git (~20 MB total) so teammates can clone them.
+Also zip for the course Azure upload: `./scripts/package_submission_videos.sh teamXX`
+
 Rename files before zipping if you know the exact eval (examples below).
 
 | File | Duration | Rename suggestion (after you verify content) |

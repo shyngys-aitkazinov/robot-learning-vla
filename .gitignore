@@ -57,8 +57,7 @@ Message.txt
 my_awesome_leader_arm.json
 my_awesome_follower_arm.json
 
-# Course submission blobs (upload via Azure, not git)
-submission_videos/*.mp4
+# Course submission blobs (large zips / checkpoints stay local)
 WhatsApp Video*.mp4
 team*-videos.zip
 team*.zip
