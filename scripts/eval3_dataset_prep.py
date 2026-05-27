@@ -1056,6 +1056,7 @@ class Eval3PrepDataset(Dataset):
         bg_aug_fn: Callable[[torch.Tensor], torch.Tensor] | None = None,
         print_aug_fn: Callable[[torch.Tensor], torch.Tensor] | None = None,
         state_aug_fn: Callable[[torch.Tensor], torch.Tensor] | None = None,
+        ref_image_injector=None,
         image_key: str = "observation.images.front",
         episode_filter: list[int] | None = None,
         truncate_at_placement: bool = False,
@@ -1077,6 +1078,7 @@ class Eval3PrepDataset(Dataset):
         self._bg_aug_fn = bg_aug_fn
         self._print_aug_fn = print_aug_fn
         self._state_aug_fn = state_aug_fn
+        self._ref_image_injector = ref_image_injector
         self._image_key = image_key
         # v16 slot-bottleneck caches (populated at the end of __init__ when
         # EVAL3_SLOT_FRAME0=1; stay empty otherwise and on prep-cache hits).

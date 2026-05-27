@@ -19,7 +19,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Inspect LeRobotDataset metadata and sample tensors.")
     parser.add_argument(
         "--repo-id",
-        default="RobotLearningVLA/taylor_swift_1",
+        default="RobotLearningVLA/banana_red_bowl_eval1_v2",
         help="HF dataset repo id",
     )
     parser.add_argument(

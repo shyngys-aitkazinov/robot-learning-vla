@@ -39,18 +39,19 @@ if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 from eval3_lerobot_shim import apply as _shim  # noqa: E402
+from eval3_device import resolve_eval3_device  # noqa: E402
 
 _shim()
 
 from lerobot.configs.policies import PreTrainedConfig  # noqa: E402
 from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: E402
 from lerobot.datasets.dataset_metadata import LeRobotDatasetMetadata  # noqa: E402
-from lerobot.datasets.feature_utils import build_dataset_frame  # noqa: E402
 from lerobot.policies.factory import make_policy, make_pre_post_processors  # noqa: E402
 from lerobot.policies.utils import make_robot_action  # noqa: E402
 from lerobot.processor.rename_processor import rename_stats  # noqa: E402
 from lerobot.utils.constants import OBS_STR  # noqa: E402
-from lerobot.utils.control_utils import predict_action  # noqa: E402
+from lerobot.common.control_utils import predict_action  # noqa: E402
+from lerobot.utils.feature_utils import build_dataset_frame  # noqa: E402
 
 JOINTS = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
 
@@ -258,10 +259,11 @@ def render_episode_video(repo: str, ep_idx: int, label: str, prompt: str,
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ckpt", default="outputs/train/eval3_swift_lecun_8k/checkpoints/008000/pretrained_model")
-    ap.add_argument("--device", default="mps")
+    ap.add_argument("--device", default="auto", help="auto, cpu, cuda, cuda:0, or mps")
     ap.add_argument("--out-dir", default="outputs/eval3_deep_analysis/videos")
     ap.add_argument("--fps", type=int, default=30)
     args = ap.parse_args()
+    device = str(resolve_eval3_device(args.device))
 
     rename_map = {"observation.images.front": "observation.images.camera1"}
 
@@ -270,19 +272,19 @@ def main():
     print("Loading policy...")
     policy_cfg = PreTrainedConfig.from_pretrained(args.ckpt)
     policy_cfg.pretrained_path = args.ckpt
-    policy_cfg.device = args.device
+    policy_cfg.device = device
     ds_meta = LeRobotDatasetMetadata("RobotLearningVLA/taylor_swift_1")
     policy = make_policy(policy_cfg, ds_meta=ds_meta, rename_map=rename_map)
     preprocessor, postprocessor = make_pre_post_processors(
         policy_cfg=policy_cfg, pretrained_path=args.ckpt,
         dataset_stats=rename_stats(ds_meta.stats, rename_map),
         preprocessor_overrides={
-            "device_processor": {"device": args.device},
+            "device_processor": {"device": device},
             "rename_observations_processor": {"rename_map": rename_map},
         },
     )
     policy.eval()
-    print(f"Policy loaded ({sum(p.numel() for p in policy.parameters())/1e6:.0f}M params, device={args.device})\n")
+    print(f"Policy loaded ({sum(p.numel() for p in policy.parameters())/1e6:.0f}M params, device={device})\n")
 
     EPISODES = [
         ("RobotLearningVLA/taylor_swift_1", "Swift", "Place the coke on the Taylor Swift", 0),
@@ -295,7 +297,7 @@ def main():
         fname = f"{label.lower()}_ep{ep}.mp4"
         info = render_episode_video(repo, ep, label, prompt,
                                      policy, preprocessor, postprocessor,
-                                     args.device, args.fps, out_dir / fname)
+                                     device, args.fps, out_dir / fname)
         summary.append((fname, info))
         print()
 
