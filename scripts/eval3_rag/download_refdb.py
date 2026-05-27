@@ -92,7 +92,9 @@ def fetch_from_wikipedia(
     Skips slugs that already have images in db_root.
     """
     sys.path.insert(0, str(_SCRIPT.parent.parent))
-    from eval3_rag.reference_injector import _fetch_portrait_online, _write_sentinel
+    from eval3_rag.reference_injector import (
+        _fetch_portrait_online, _write_sentinel, _write_canonical_portrait,
+    )
 
     results: dict[str, bool] = {}
     for slug in slugs:
@@ -100,9 +102,9 @@ def fetch_from_wikipedia(
         existing = list(celeb_dir.glob("wiki_portrait.*")) if celeb_dir.exists() else []
         if existing:
             log.info("wiki: %s — already cached (%s)", slug, existing[0].name)
-            # Retroactively stamp the sentinel if a previously-downloaded portrait
-            # exists but the sentinel file predates this session.
-            _write_sentinel(celeb_dir)
+            # Retroactively stamp per-file sentinel for previously-downloaded portraits.
+            for p in existing:
+                _write_sentinel(celeb_dir, p.name)
             results[slug] = True
             continue
 
@@ -157,7 +159,7 @@ def fetch_from_hf(
 
     from PIL import Image as _PILImage
     sys.path.insert(0, str(_SCRIPT.parent.parent))
-    from eval3_rag.reference_injector import _write_sentinel
+    from eval3_rag.reference_injector import _write_sentinel, _write_canonical_portrait
 
     target_slugs = set(slugs)
     satisfied: set[str] = set()
@@ -246,7 +248,7 @@ def fetch_from_hf(
             celeb_dir.mkdir(parents=True, exist_ok=True)
             pil_img.save(dst, "JPEG", quality=95)
             # HF face datasets contain pre-cropped identity images — mark validated.
-            _write_sentinel(celeb_dir)
+            _write_sentinel(celeb_dir, dst.name)
             log.info("hf: %-30s  %dx%d  → %s", slug, w, h, dst.name)
 
         counts[slug] = new_here + 1
@@ -254,6 +256,17 @@ def fetch_from_hf(
             satisfied.add(slug)
 
     log.info("HF: scanned %d rows, found portraits for: %s", scanned, sorted(satisfied))
+
+    # Pre-compute canonical portrait for each satisfied slug so inference is instant.
+    for slug in satisfied:
+        celeb_dir = db_root / slug
+        try:
+            imgs = [p for p in celeb_dir.iterdir()
+                    if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}]
+            _write_canonical_portrait(celeb_dir, imgs)
+        except Exception:
+            pass
+
     return satisfied
 
 

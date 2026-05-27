@@ -307,9 +307,10 @@ def fetch_from_hf(
         counts[slug] = already_saved + 1
 
     ok = sum(1 for n in counts.values() if n > 0)
+    n_target = len(target_slugs) if target_slugs is not None else "all"
     log.info(
-        "HF stream: scanned %d rows → %d/%d celebrities got new images",
-        scanned, ok, len(target_slugs),
+        "HF stream: scanned %d rows → %d/%s celebrities got new images",
+        scanned, ok, n_target,
     )
     return counts
 

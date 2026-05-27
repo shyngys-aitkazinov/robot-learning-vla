@@ -47,7 +47,32 @@
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+_SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 cd "$ROOT"
+
+# ── keep alive after VSCode / SSH disconnect ──────────────────────────────────
+if [[ -z "${TMUX:-}" && "${EVAL3_NO_TMUX:-0}" != "1" ]]; then
+  if command -v tmux >/dev/null 2>&1; then
+    SESSION="eval3_synth_$(date +%Y%m%d_%H%M%S)"
+    LOG="$ROOT/outputs/logs/${SESSION}.log"
+    mkdir -p "$ROOT/outputs/logs"
+    _QSELF="$(printf '%q' "$_SELF")"
+    _QLOG="$(printf '%q' "$LOG")"
+    _QARGS=""
+    for _a in "$@"; do _QARGS="${_QARGS} $(printf '%q' "$_a")"; done
+    tmux new-session -d -s "$SESSION" \
+      "EVAL3_NO_TMUX=1 bash ${_QSELF}${_QARGS} 2>&1 | tee ${_QLOG}"
+    echo ">> Synth generation launched in tmux session '$SESSION'"
+    echo "   Log        : $LOG"
+    echo "   Watch live : tail -f $LOG"
+    echo "   Attach     : tmux attach -t $SESSION"
+    exit 0
+  else
+    echo ">> WARNING: tmux not found — install: sudo apt-get install -y tmux"
+    echo "   Running directly (job will die if VSCode/SSH disconnects)"
+  fi
+fi
+
 # shellcheck disable=SC1091
 source .venv/bin/activate
 
@@ -57,7 +82,7 @@ PUSH="${EVAL3_RAG_PUSH_TO_HUB:-1}"
 # ── OOD celebrity targets ────────────────────────────────────────────────────
 # These are the 10 celebrities from out-distribution-eval-3-pins/
 # (not TOY: no taylor_swift, barack_obama, yann_lecun).
-DEFAULT_CELEBS="cristiano_ronaldo,lionel_messi,rihanna,elon_musk,leonardo_dicaprio,tom_cruise,dwayne_johnson,robert_downey_jr,scarlett_johansson,jennifer_lawrence"
+DEFAULT_CELEBS="cristiano_ronaldo,lionel_messi,rihanna,elon_musk,leonardo_dicaprio,tom_cruise,dwayne_johnson,robert_downey_jr,scarlett_johansson,jennifer_lawrence,marc_pollefeys"
 CELEBS="${EVAL3_RAG_CELEBS:-$DEFAULT_CELEBS}"
 POSITIONS="${EVAL3_RAG_POSITIONS:-left,middle,right}"
 
@@ -65,7 +90,15 @@ POSITIONS="${EVAL3_RAG_POSITIONS:-left,middle,right}"
 # Default: N=5 photos × M=20 scenes = 100 configs per dataset.
 # Full quality run: N=10, M=50 → same as v16 Pins sweep.
 MAX_PHOTOS="${EVAL3_RAG_MAX_PHOTOS:-5}"
-DISTRACTORS="${EVAL3_RAG_DISTRACTORS:-20}"
+DISTRACTORS="${EVAL3_RAG_DISTRACTORS:-10}"
+
+# MIN_PHOTOS must be > MAX_PHOTOS so the top-MAX_PHOTOS images used for
+# compositing are a strict subset of what the RAG wrapper can sample for
+# camera2.  The remaining (MIN_PHOTOS - MAX_PHOTOS) images appear *only* in
+# camera2 during training — forcing the model to do cross-image identity
+# matching instead of exact pixel lookup.  (Problem 2 fix.)
+MIN_PHOTOS="${EVAL3_RAG_MIN_PHOTOS:-10}"
+REFDB_DIR="${EVAL3_RAG_REFDB:-datasets/celeb_refdb}"
 
 # ── pool JSON ────────────────────────────────────────────────────────────────
 # Priority order (first found wins):
@@ -102,6 +135,76 @@ if echo "$POOL_JSON" | grep -q "pins-face-recognition"; then
   fi
 fi
 
+# ── auto-populate celeb_refdb with enough portraits per OOD celeb ────────────
+# Ensures MIN_PHOTOS images exist per celeb before compositing runs so that:
+#   Problem 1 (diversity):   synth generator produces MAX_PHOTOS×M×3 episodes
+#                            instead of 1×M×3.
+#   Problem 2 (ref≠synth):  images ranked MAX_PHOTOS+1…MIN_PHOTOS only ever
+#                            appear in camera2, never composited into scenes.
+#   Problem 3 (resolution): CelebA-HQ supplies 1024px crops vs the 302-564px
+#                            Pins fallback; higher res → sharper ChArUco warp.
+#
+# Source priority:
+#   1. CelebA-HQ via HF streaming (entertainment celebrities, 1024×1024px)
+#   2. Wikipedia REST API fallback (any public figure, incl. academics like
+#      marc_pollefeys who are not in CelebA-HQ)
+#
+# Skip with: EVAL3_RAG_SKIP_REFDB_POPULATE=1
+if [[ "${EVAL3_RAG_SKIP_REFDB_POPULATE:-0}" != "1" ]]; then
+  echo ">> Checking celeb_refdb portrait counts (min=${MIN_PHOTOS} per celeb) ..."
+  _NEED_CSV=""
+  IFS=',' read -ra _CELEB_ARR <<< "$CELEBS"
+  for _c in "${_CELEB_ARR[@]}"; do
+    _n=0
+    if [[ -d "$REFDB_DIR/$_c" ]]; then
+      _n=$(find "$REFDB_DIR/$_c" -maxdepth 1 \
+             \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.webp" \) \
+             2>/dev/null | wc -l | tr -d ' ')
+    fi
+    if [[ "$_n" -lt "$MIN_PHOTOS" ]]; then
+      echo "   $_c: $_n / $MIN_PHOTOS — will fetch"
+      _NEED_CSV="${_NEED_CSV:+${_NEED_CSV},}${_c}"
+    else
+      echo "   $_c: $_n images ✓"
+    fi
+  done
+
+  if [[ -n "$_NEED_CSV" ]]; then
+    echo ""
+    echo "   Step 1/2: CelebA-HQ HF stream (entertainment celebrities, 1024px) ..."
+    python scripts/eval3_rag/build_celeb_refdb.py \
+      --db-root "$REFDB_DIR" \
+      --from-hf "leondgarse/celeba_hq_face_recognition" \
+      --slugs  "$_NEED_CSV" \
+      --hf-max-per-celeb "$MIN_PHOTOS" || true
+
+    # Wikipedia fallback for anyone still missing (academics, researchers, etc.)
+    _WIKI_SLUGS=()
+    IFS=',' read -ra _NEED_ARR <<< "$_NEED_CSV"
+    for _c in "${_NEED_ARR[@]}"; do
+      _n=0
+      if [[ -d "$REFDB_DIR/$_c" ]]; then
+        _n=$(find "$REFDB_DIR/$_c" -maxdepth 1 \
+               \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.webp" \) \
+               2>/dev/null | wc -l | tr -d ' ')
+      fi
+      [[ "$_n" -lt 1 ]] && _WIKI_SLUGS+=("$_c")
+    done
+    if [[ ${#_WIKI_SLUGS[@]} -gt 0 ]]; then
+      echo "   Step 2/2: Wikipedia fallback for: ${_WIKI_SLUGS[*]}"
+      python scripts/eval3_rag/download_refdb.py \
+        --db-root "$REFDB_DIR" \
+        --slugs "${_WIKI_SLUGS[@]}" || true
+    fi
+
+    echo "   Rebuilding pool JSON with updated images ..."
+    python scripts/eval3_rag/build_rag_pool_json.py \
+      --out-json "datasets/rag_pool.json"
+    POOL_JSON="datasets/rag_pool.json"
+    echo ""
+  fi
+fi
+
 # ── workers ──────────────────────────────────────────────────────────────────
 if command -v nproc >/dev/null 2>&1; then
   DEFAULT_W=$(nproc)
@@ -110,6 +213,13 @@ else
 fi
 WORKERS="${EVAL3_RAG_WORKERS:-$DEFAULT_W}"
 OVERWRITE="${EVAL3_RAG_OVERWRITE:-0}"
+
+# ── source recordings ────────────────────────────────────────────────────────
+# Pattern: {SOURCE_PREFIX}_{position}{SOURCE_SUFFIX}
+# e.g. dataset_v5_charuko_left_1 (downloaded from SOURCE_HUB_ORG if missing).
+SOURCE_PREFIX="${EVAL3_RAG_SOURCE_PREFIX:-dataset_v5_charuko}"
+SOURCE_SUFFIX="${EVAL3_RAG_SOURCE_SUFFIX:-_1}"
+SOURCE_HUB_ORG="${EVAL3_RAG_SOURCE_HUB_ORG:-RobotLearningVLA}"
 
 # ── name suffix distinguishes RAG synth from existing v16 synth ──────────────
 # Uses "rag1" suffix → dataset_v3_synth_rag1_<celeb>_<pos>_2
@@ -120,6 +230,7 @@ echo "   pool json  : $POOL_JSON"
 echo "   celebs     : $CELEBS"
 echo "   positions  : $POSITIONS"
 echo "   N×M        : ${MAX_PHOTOS} photos × ${DISTRACTORS} scenes = $((MAX_PHOTOS * DISTRACTORS)) configs/dataset"
+echo "   source     : ${SOURCE_PREFIX}_{pos}${SOURCE_SUFFIX}  (hub: ${SOURCE_HUB_ORG:-local only})"
 echo "   workers    : $WORKERS"
 echo "   push hub   : $PUSH  →  org: $HF_ORG"
 echo ""
@@ -142,13 +253,16 @@ if [[ "$OVERWRITE" == "1" ]]; then
   OW_ARGS+=(--overwrite)
 fi
 
-exec python tools/eval3_synth_pins_dataset_gen.py \
+exec python scripts/eval3_rag/synth_pins_gen_rag.py \
   --pool-json "$POOL_JSON" \
   --target-celebs "$CELEBS" \
   --target-positions "$POSITIONS" \
   --max-photos-per-celeb "$MAX_PHOTOS" \
   --distractors-per-target-photo "$DISTRACTORS" \
   --output-suffix "$OUTPUT_SUFFIX" \
+  --source-prefix "$SOURCE_PREFIX" \
+  --source-suffix "$SOURCE_SUFFIX" \
+  --source-hub-org "$SOURCE_HUB_ORG" \
   --n-workers "$WORKERS" \
   "${PUSH_ARGS[@]}" \
   "${OW_ARGS[@]}" \

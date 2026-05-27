@@ -28,7 +28,31 @@
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+_SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 cd "$ROOT"
+
+# ── keep alive after VSCode / SSH disconnect ──────────────────────────────────
+if [[ -z "${TMUX:-}" && "${EVAL3_NO_TMUX:-0}" != "1" ]]; then
+  if command -v tmux >/dev/null 2>&1; then
+    SESSION="eval3_deploy_$(date +%Y%m%d_%H%M%S)"
+    LOG="$ROOT/outputs/logs/${SESSION}.log"
+    mkdir -p "$ROOT/outputs/logs"
+    _QSELF="$(printf '%q' "$_SELF")"
+    _QLOG="$(printf '%q' "$LOG")"
+    _QARGS=""
+    for _a in "$@"; do _QARGS="${_QARGS} $(printf '%q' "$_a")"; done
+    tmux new-session -d -s "$SESSION" \
+      "EVAL3_NO_TMUX=1 bash ${_QSELF}${_QARGS} 2>&1 | tee ${_QLOG}"
+    echo ">> Deploy launched in tmux session '$SESSION'"
+    echo "   Log        : $LOG"
+    echo "   Watch live : tail -f $LOG"
+    echo "   Attach     : tmux attach -t $SESSION"
+    exit 0
+  else
+    echo ">> WARNING: tmux not found — install: sudo apt-get install -y tmux"
+    echo "   Running directly (job will die if VSCode/SSH disconnects)"
+  fi
+fi
 
 TASK="${1:?Usage: $0 'Place the coke on <Celebrity Name>'}"
 
@@ -40,7 +64,7 @@ fi
 source .venv/bin/activate
 
 # ── checkpoint ──────────────────────────────────────────────────────────────
-CKPT="${EVAL3_RAG_CKPT:-outputs/train/eval3_rag/checkpoints/050000/pretrained_model}"
+CKPT="${EVAL3_RAG_CKPT:-outputs/train/test_eval3_v1/checkpoints/050000/pretrained_model}"
 if [[ ! -d "$CKPT" ]]; then
   echo "ERROR: RAG checkpoint not found at $CKPT" >&2
   echo "       Train first:  ./scripts/eval3_rag/run_train_rag.sh" >&2

@@ -247,31 +247,87 @@ def _has_detectable_face(img_path: str | Path) -> bool:
 # Portrait validation — inference-safe helpers
 # ---------------------------------------------------------------------------
 
-_SENTINEL_FILENAME = ".portrait_validated"
+_SENTINEL_FILENAME  = ".portrait_validated"
+_CANONICAL_FILENAME = ".canonical_portrait"  # pre-computed best-resolution filename
 
 
-def _write_sentinel(slug_dir: str | Path) -> None:
-    """Write a validation marker after face detection succeeds.
+def _write_canonical_portrait(slug_dir: str | Path, image_paths: list[str | Path]) -> None:
+    """Pre-compute and cache the highest-resolution portrait filename.
 
-    Called by download_refdb.py after Haar cascade passes — NOT at inference.
-    The sentinel lets inference-time code know a human-reviewed (machine-
-    verified) portrait is present without re-running any image recognition.
+    Called offline (fetch_wiki_portraits.py / download_refdb.py) after all
+    portraits for a celebrity are saved.  Writes the filename of the
+    highest-resolution validated image to .canonical_portrait so that
+    _best_portrait_path() can return it instantly at inference without
+    opening any image files.
+
+    Safe to call with an empty list (no-op).
     """
+    if not image_paths:
+        return
     try:
-        (Path(slug_dir) / _SENTINEL_FILENAME).touch()
+        from PIL import Image as _PILImage
+        best_name, best_px = "", 0
+        for p in image_paths:
+            try:
+                with _PILImage.open(str(p)) as im:
+                    px = im.width * im.height
+                if px > best_px:
+                    best_px = px
+                    best_name = Path(p).name
+            except Exception:
+                pass
+        if best_name:
+            Path(slug_dir).joinpath(_CANONICAL_FILENAME).write_text(best_name + "\n")
     except Exception:
         pass
 
 
-def _has_portrait_sentinel(slug_dir: str | Path) -> bool:
-    """True if the celebrity directory holds pre-validated portrait images.
+def _write_sentinel(slug_dir: str | Path, filename: str | None = None) -> None:
+    """Record a Haar-validated filename in the sentinel file.
 
-    This is a plain file-existence check — no pixel inspection, no model calls.
-    Directories populated by download_refdb.py or fetch_from_hf always have
-    the sentinel; directories populated manually do not (aspect-ratio fallback
-    applies instead).
+    Called offline (fetch_wiki_portraits.py / download_refdb.py) after face
+    detection passes — never at inference.
+
+    If *filename* is given, the name is appended to the sentinel so that
+    _load_validated_filenames() can return exactly which files were validated.
+    If *filename* is None (legacy call-sites), the sentinel is touched as a
+    boolean marker for backward compatibility.
     """
-    return (Path(slug_dir) / _SENTINEL_FILENAME).exists()
+    try:
+        sentinel = Path(slug_dir) / _SENTINEL_FILENAME
+        if filename:
+            with sentinel.open("a") as f:
+                f.write(filename + "\n")
+        else:
+            sentinel.touch()
+    except Exception:
+        pass
+
+
+def _load_validated_filenames(slug_dir: str | Path) -> set[str] | None:
+    """Return the set of Haar-validated filenames for *slug_dir*, or None.
+
+    Returns None when no sentinel exists.
+    Returns an empty set when the sentinel exists but has no listed files
+    (legacy touch-only sentinel) — callers treat this as "all files validated".
+    Returns a non-empty set when the sentinel lists specific filenames — only
+    those files are considered validated.
+
+    This is a plain text read — no pixel inspection, no image recognition.
+    """
+    sentinel = Path(slug_dir) / _SENTINEL_FILENAME
+    if not sentinel.exists():
+        return None
+    try:
+        names = {ln.strip() for ln in sentinel.read_text().splitlines() if ln.strip()}
+        return names  # empty set = legacy boolean sentinel
+    except Exception:
+        return set()  # unreadable sentinel → treat as legacy boolean
+
+
+def _has_portrait_sentinel(slug_dir: str | Path) -> bool:
+    """Backward-compat alias — True if any sentinel exists for this directory."""
+    return _load_validated_filenames(slug_dir) is not None
 
 
 def _is_portrait_aspect(path: str, min_ratio: float = 0.5) -> bool:
@@ -341,7 +397,29 @@ def _fetch_portrait_online(
     save_dir = Path(save_root) / slug
     save_dir.mkdir(parents=True, exist_ok=True)
 
+    # Filename fragments that strongly indicate non-portrait images.
+    # Applied at runtime when validate_face=False (inference auto-fetch)
+    # so we at least reject obvious event/logo/map images by URL.
+    _URL_SKIP = frozenset([
+        "logo", "flag", "signature", "map", "icon", "stadium", "trophy",
+        "album", "poster", "chart", "banner", "wikidata", "wikipedia",
+        "premiere", "ceremony", "gala", "festival", "awards",
+        "red_carpet", "conference", "concert", "_vs_", "_vs.",
+        "figure", "tussaud", "statue",
+    ])
+
+    def _url_looks_like_portrait(url: str) -> bool:
+        """Heuristic: reject URLs whose filename contains known non-portrait terms."""
+        fname = urllib.parse.unquote(url.split("/")[-1]).lower().replace(" ", "_")
+        return not any(frag in fname for frag in _URL_SKIP)
+
     def _download_and_cache(img_url: str, filename: str) -> str | None:
+        # At inference (validate_face=False) apply URL-fragment filter so
+        # obvious non-portrait images are skipped before any download.
+        if not validate_face and not _url_looks_like_portrait(img_url):
+            log.debug("fetch_portrait: skipping non-portrait URL: %s", img_url.split("/")[-1])
+            return None
+
         parsed_ext = Path(urllib.parse.urlparse(img_url).path).suffix.lower()
         ext = parsed_ext if parsed_ext in {".jpg", ".jpeg", ".png", ".webp"} else ".jpg"
         save_path = save_dir / f"{filename}{ext}"
@@ -363,6 +441,7 @@ def _fetch_portrait_online(
             log.warning("fetch_portrait: download failed for %r: %s", slug, exc)
             save_path.unlink(missing_ok=True)
             return None
+
         if validate_face and not _has_detectable_face(save_path):
             log.warning(
                 "fetch_portrait: image for %r has no detectable face — discarding. "
@@ -371,9 +450,22 @@ def _fetch_portrait_online(
             )
             save_path.unlink(missing_ok=True)
             return None
+
+        # Aspect-ratio check (inference path): Wikipedia lead images are usually
+        # portrait-oriented; reject clear landscape images (H < 0.7*W).
+        if not validate_face and not _is_portrait_aspect(str(save_path), min_ratio=0.7):
+            log.warning(
+                "fetch_portrait: %r lead image has landscape aspect ratio — discarding. "
+                "Pre-download with: python scripts/eval3_rag/download_refdb.py --slugs %s",
+                slug, slug,
+            )
+            save_path.unlink(missing_ok=True)
+            return None
+
         log.info("fetch_portrait: saved portrait %s → %s", display_name, save_path)
         if validate_face:
-            _write_sentinel(save_dir)
+            # Offline validation path: record exact filename in sentinel.
+            _write_sentinel(save_dir, save_path.name)
         return str(save_path)
 
     # ── query Wikipedia REST Summary API ─────────────────────────────────────
@@ -555,27 +647,47 @@ class ReferenceImageInjector:
                 celeb_dir_found = os.path.join(save_root, self._celeb_slug)
 
         # ── Portrait quality gate (inference-safe, no image recognition) ────────
-        # Priority 1: sentinel file — directory was pre-validated by download_refdb.py
-        #   using Haar cascade face detection.  Just check file existence; zero pixels.
-        # Priority 2: aspect ratio — for inference-time auto-fetched images without a
-        #   sentinel, filter to portrait/square orientation (H >= W*0.5). Pure header
-        #   read, not image recognition.  Falls back to all images if none pass.
-        if celeb_dir_found and not _has_portrait_sentinel(celeb_dir_found):
-            total = len(paths)
-            portrait_paths = [p for p in paths if _is_portrait_aspect(p)]
-            if portrait_paths:
-                paths = portrait_paths
+        # Priority 1: sentinel with filenames — filter to exactly the files that
+        #   passed Haar detection offline.  Pure text-file read; zero pixels.
+        # Priority 2: legacy boolean sentinel (empty file) — all images in dir
+        #   were validated as a batch; use all of them.
+        # Priority 3: no sentinel — aspect-ratio fallback (PIL header read only).
+        if celeb_dir_found:
+            validated = _load_validated_filenames(celeb_dir_found)
+            if validated is None:
+                # No sentinel — aspect-ratio filter as best-effort guard.
+                total = len(paths)
+                portrait_paths = [p for p in paths if _is_portrait_aspect(p)]
+                if portrait_paths:
+                    paths = portrait_paths
+                    log.info(
+                        "ReferenceImageInjector: %r — no sentinel; aspect-ratio filter "
+                        "kept %d/%d image(s).",
+                        self._celeb_slug, len(portrait_paths), total,
+                    )
+                else:
+                    log.warning(
+                        "ReferenceImageInjector: %r — no sentinel and no portrait-aspect "
+                        "images found; using all %d image(s) as-is.",
+                        self._celeb_slug, total,
+                    )
+            elif validated:
+                # Sentinel lists specific filenames — keep only those.
+                total = len(paths)
+                paths = [p for p in paths if os.path.basename(p) in validated]
                 log.info(
-                    "ReferenceImageInjector: %r — no sentinel; aspect-ratio filter "
-                    "kept %d/%d image(s).",
-                    self._celeb_slug, len(portrait_paths), total,
+                    "ReferenceImageInjector: %r — sentinel filter kept %d/%d image(s).",
+                    self._celeb_slug, len(paths), total,
                 )
-            else:
-                log.warning(
-                    "ReferenceImageInjector: %r — no sentinel and no portrait-aspect "
-                    "images found; using all %d image(s) as-is.",
-                    self._celeb_slug, total,
-                )
+                if not paths:
+                    log.warning(
+                        "ReferenceImageInjector: %r — sentinel listed %d file(s) but "
+                        "none found on disk; falling back to all images.",
+                        self._celeb_slug, len(validated),
+                    )
+                    paths = [p for p in glob.glob(
+                        os.path.join(celeb_dir_found, "*")) if os.path.isfile(p)]
+            # else: validated is an empty set = legacy boolean sentinel; use all paths
 
         paths.sort()
         if not paths:
@@ -604,22 +716,50 @@ class ReferenceImageInjector:
     def _best_portrait_path(self) -> str:
         """Return the path of the highest-resolution portrait for canonical inference.
 
-        When multiple portraits are available (e.g. a tiny ref_01.jpg crop AND a
-        large wiki_portrait.jpg), the largest image carries the most detail after
-        downsampling to the model's input size.  Falls back to index 0 on errors.
+        Fast path (O(1)): if .canonical_portrait was written offline by
+        fetch_wiki_portraits.py or download_refdb.py, read the filename from
+        that text file and return immediately — no image file is opened.
+
+        Slow path (fallback): scan all validated image paths with PIL header
+        reads.  Only used when the canonical file is absent or names a file
+        not in the validated set (e.g. first run before offline pre-download).
         """
         if self._canonical_idx is None:
-            from PIL import Image as _PILImage
-            best_idx, best_px = 0, 0
-            for i, p in enumerate(self._image_paths):
+            # ── Fast path: pre-computed canonical file ───────────────────────
+            for db_dir in self._search_dirs:
+                canon_file = os.path.join(db_dir, self._celeb_slug, _CANONICAL_FILENAME)
+                if os.path.isfile(canon_file):
+                    try:
+                        name = open(canon_file).read().strip()
+                        for i, p in enumerate(self._image_paths):
+                            if os.path.basename(p) == name:
+                                self._canonical_idx = i
+                                break
+                    except Exception:
+                        pass
+                    if self._canonical_idx is not None:
+                        break
+
+            # ── Slow path: PIL header scan (offline fallback) ────────────────
+            if self._canonical_idx is None:
+                from PIL import Image as _PILImage
+                best_idx, best_px = 0, 0
+                for i, p in enumerate(self._image_paths):
+                    try:
+                        with _PILImage.open(p) as im:
+                            px = im.width * im.height
+                        if px > best_px:
+                            best_px, best_idx = px, i
+                    except Exception:
+                        pass
+                self._canonical_idx = best_idx
+                # Persist result so future restarts use the fast path instead.
                 try:
-                    with _PILImage.open(p) as im:
-                        px = im.width * im.height
-                    if px > best_px:
-                        best_px, best_idx = px, i
+                    slug_dir = os.path.dirname(self._image_paths[best_idx])
+                    _write_canonical_portrait(slug_dir, self._image_paths)
                 except Exception:
                     pass
-            self._canonical_idx = best_idx
+
         return self._image_paths[self._canonical_idx]
 
     # ------------------------------------------------------------------

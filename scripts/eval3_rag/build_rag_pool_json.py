@@ -86,6 +86,7 @@ _KNOWN_NAMES: dict[str, str] = {
     "robert_downey_jr":  "Robert Downey Jr",
     "scarlett_johansson":"Scarlett Johansson",
     "jennifer_lawrence": "Jennifer Lawrence",
+    "marc_pollefeys":    "Marc Pollefeys",
 }
 
 # Source directories scanned in order.  Images found in earlier dirs are
@@ -209,8 +210,7 @@ def build_pool_json(
             widths = [_image_width(Path(p)) for p in c["quality_photos"]]
             print(f"    {c['slug']:<25}  {c['n_images']} imgs  {min(widths)}–{max(widths)}px")
             if c["n_images"] < 3:
-                print(f"    {'':25}  ^^^ only {c['n_images']} image(s) — synth will produce "
-                      f"{c['n_images']}×N episodes instead of max_photos×N")
+                print(f"    {'':25}  ^^^ only {c['n_images']} image(s) — augmented variants fill remaining slots")
         return {"celebrities": celebrities}
 
     pool = {
@@ -274,12 +274,14 @@ def main() -> None:
     print(f"\nPool JSON written: {args.out_json}")
     print(f"  {pool['total_celebrities']} celebrities, {pool['total_images']} images total")
     print(f"\nOOD synth episode estimate (default MAX_PHOTOS=5, DISTRACTORS=20):")
+    print(f"  (normalized: all celebrities get 5×20×3=300 episodes; under-represented use augmented variants)")
     for c in pool["celebrities"]:
         if c["held_out"]:
             continue
-        n_photos = min(5, c["n_images"])
-        episodes = n_photos * 20 * 3   # ×3 positions
-        print(f"  {c['slug']:<25}  {c['n_images']} imgs → {n_photos}×20×3 = {episodes} episodes")
+        n_actual = min(5, c["n_images"])
+        n_aug = 5 - n_actual
+        aug_note = f"  ({n_aug} aug slot{'s' if n_aug != 1 else ''})" if n_aug > 0 else ""
+        print(f"  {c['slug']:<25}  {c['n_images']} imgs → 5×20×3 = 300 episodes{aug_note}")
     print(f"\nUse with gen_rag_synth.sh:")
     print(f"  EVAL3_RAG_POOL_JSON={args.out_json} \\")
     print(f"  EVAL3_RAG_HF_ORG=yukk1 EVAL3_RAG_PUSH_TO_HUB=1 \\")

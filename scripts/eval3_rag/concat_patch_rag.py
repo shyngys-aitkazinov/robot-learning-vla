@@ -107,7 +107,7 @@ def _build_cam2_augmentation(p: float):
             img = TF.adjust_saturation(img, sa)
             img = TF.adjust_hue(img, hu)
 
-        # 3. Greyscale / monochrome print (probability matches typical B&W prints)
+        # 2. Greyscale / monochrome print (probability matches typical B&W prints)
         if rng() < p * 0.5:
             grey = TF.rgb_to_grayscale(img, num_output_channels=3)
             # Blend so it may be partially desaturated, not always full grey
@@ -237,28 +237,37 @@ class Eval3RagWrapper:
         task = row.get("task", "") or ""
         slug = task_to_celeb_slug(str(task))
 
-        if slug is None:
-            # OOD fallback: try to infer slug from repo_id embedded in the row
-            repo = row.get("dataset_index", "")
-            if repo:
-                from eval3_rag.reference_injector import _repo_id_to_celeb_slug
-                slug = _repo_id_to_celeb_slug(str(repo))
+        h, w = self._image_hw
+        ref_tensor: torch.Tensor | None = None
 
         if slug is not None:
             inj = self._get_injector(slug)
             if inj is not None:
-                ref_tensor = inj()  # (3, H, W) float [0,1], randomly sampled image
+                ref_tensor = inj()  # (3, H, W) float [0,1], randomly sampled portrait
                 if self._cam2_aug:
                     aug = _get_cam2_aug(self._cam2_aug_p)
                     if aug is not None:
                         ref_tensor = aug(ref_tensor)
-                row = dict(row)
-                row["observation.images.front_refface"] = ref_tensor
-                # Overwrite the task: strip the person's name so the model
-                # never sees celebrity names and must rely on camera2 instead.
-                # This MUST match the canonical task used at inference in deploy_rag.py.
-                row["task"] = self._canonical_task
 
+        if ref_tensor is None:
+            # Slug absent or no images in DB.
+            # Inject a zero tensor so every row in the batch has front_refface —
+            # missing keys cause collation crashes when mixed with rows that do
+            # have the key.  All real training rows have named celebrity tasks
+            # so this path should not be hit during normal training.
+            if slug is None:
+                logging.debug(
+                    "Eval3RagWrapper[%d]: task=%r has no celebrity name — camera2 zeros.",
+                    idx, task,
+                )
+            ref_tensor = torch.zeros(3, h, w)
+
+        row = dict(row)
+        row["observation.images.front_refface"] = ref_tensor
+        # Always overwrite the task to the canonical form that strips the
+        # celebrity name — the model must rely on camera2 for identity.
+        # This MUST match the canonical task used at inference in deploy_rag.py.
+        row["task"] = self._canonical_task
         return row
 
     # ── trainer-required attribute proxies ───────────────────────────────────
