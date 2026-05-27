@@ -241,17 +241,48 @@ class SourceEpisodeMeta:
     video_file: int
 
 
-def load_source_episodes(source_root: Path, position: str, source_suffix: str = "_2") -> tuple[Path, list[SourceEpisodeMeta], np.ndarray, np.ndarray]:
+def _maybe_download_source(
+    source_root: Path, ds_name: str, hub_org: str,
+) -> None:
+    """Download ``hub_org/ds_name`` from HF Hub into ``source_root/ds_name`` if not present."""
+    target = source_root / ds_name
+    if target.is_dir():
+        return
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError:
+        sys.exit("huggingface_hub is required for --source-hub-org; pip install huggingface_hub")
+    repo_id = f"{hub_org}/{ds_name}"
+    print(f"[download] {repo_id} -> {target} ...", flush=True)
+    snapshot_download(
+        repo_id=repo_id,
+        repo_type="dataset",
+        local_dir=str(target),
+        ignore_patterns=["*.gitattributes", ".gitattributes"],
+    )
+    print(f"[download] done: {target}", flush=True)
+
+
+def load_source_episodes(
+    source_root: Path, position: str,
+    source_suffix: str = "_2",
+    source_prefix: str = "dataset_v3_charuco",
+    source_hub_org: str = "",
+) -> tuple[Path, list[SourceEpisodeMeta], np.ndarray, np.ndarray]:
     """Return (mp4_path, [SourceEpisodeMeta x N], action_array, state_array).
 
     Joint arrays are flat (concatenated across all source episodes); use the
     per-episode from/to_frame_global indices to slice them per episode.
 
-    ``source_suffix`` (default ``_2``) selects which ChArUco recording variant
-    to read from — e.g. ``_1`` for the older capture, ``_2`` for the newer one
-    that the v3 synth corpus is built on.
+    ``source_prefix`` (default ``dataset_v3_charuco``) + ``source_suffix``
+    (default ``_2``) form the dataset dir name: ``{prefix}_{position}{suffix}``.
+    When ``source_hub_org`` is set and the local dir is missing, the dataset is
+    downloaded automatically from ``{source_hub_org}/{ds_name}`` on HF Hub.
     """
-    ds = source_root / f"dataset_v3_charuco_{position}{source_suffix}"
+    ds_name = f"{source_prefix}_{position}{source_suffix}"
+    if source_hub_org:
+        _maybe_download_source(source_root, ds_name, source_hub_org)
+    ds = source_root / ds_name
     if not ds.is_dir():
         sys.exit(f"source dataset missing: {ds}")
     # Episodes parquet — one per chunk (we know v3 ChArUco has chunk-000 only).
@@ -434,6 +465,11 @@ class WorkerArgs:
     # The pinned generator sets both to _1 to target the older captures.
     source_suffix: str = "_2"
     output_postfix: str = "_2"
+    # Prefix for the source ChArUco dataset dir names (default "dataset_v3_charuco").
+    # Override e.g. to "dataset_v5_charuko" to use the v5 Hub captures.
+    source_prefix: str = "dataset_v3_charuco"
+    # If set, auto-download missing source datasets from this HF Hub org.
+    source_hub_org: str = ""
     # Optional override for the config grid. When None (default), use the full
     # build_config_grid (5^3 * 2 = 250 for N=5, 2000 for N=10). When set, the
     # worker uses exactly this list of configs — the pinned generator passes
