@@ -84,6 +84,32 @@ cam2.
 | + algvr add-on | `EVAL3_V17_INCLUDE_ALGVR=1` | (above) + up to 102 local `dataset_v5_synth_algvr_*_full` | +~296k | Identity diversity — 34 academic faces from `algvr-conference.json` warped onto v5 charuko boards (see §3.5). At default M=6 the per-celeb identity exposure is small (~1–2 photos × 6 distractors) so this slate's main signal is **distractor breadth**. |
 | + pins30q5 add-on | `EVAL3_V17_INCLUDE_PINS30Q5=1` | (above) + up to 90 local `dataset_v5_synth_pins30q5_*_full` | +~640k | Globally-recognisable identity diversity — 30 Pins celebs (Ronaldo, Swift, Bezos, …) × 5 best **quality-ranked, B&W-penalised** photos each, warped onto v5 charuko boards (see §3.6). Per-celeb exposure is **dense** (5 photos × 3 distractors); complements the algvr slate's breadth. |
 
+### Sampling-weight replication (`EVAL3_V17_V4_REPLICAS`)
+
+The default v17 corpus is **identity-rich but real-poor**: with `INCLUDE_ALGVR=1
++ INCLUDE_PINS30Q5=1` the 9 real `dataset_v4_*` repos contribute ~33k frames
+out of ~1.3M — about **2.5 %**. ConcatLeRobotDataset samples uniformly across
+frames, so v4's sampling weight is effectively the same 2.5 %. That's too thin
+to anchor the action expert on real trajectories.
+
+`EVAL3_V17_V4_REPLICAS=N` (default `1`) repeats each of the 9 v4 repos N times
+in `EXTRA_REPOS`. Because eval3_concat_patch builds one `LeRobotDataset` per
+entry and ConcatLeRobotDataset samples per-frame uniformly across the union,
+listing v4 N times multiplies v4's effective sample weight by N — without
+changing the model, the loss, or the augmenters.
+
+Recommended values:
+
+| Corpus | N for v4 ≈ 28 % | N for v4 ≈ 50 % |
+|---|---|---|
+| v4 + algvr (no pins30q5) | **7** | 18 |
+| v4 + algvr + pins30q5 | **15** | 38 |
+| v4 + algvr + pins30q5 + v3_synth | 18 | 47 |
+
+Memory cost is negligible: duplicate datasets share on-disk parquet/mp4 files;
+only N copies of the in-memory frame-0 cache stack (~10 MB per v4 repo at
+N=15 → ~90 MB total).
+
 ### Launch / relaunch
 
 Smoke (~5 min on MPS):
@@ -108,6 +134,83 @@ EVAL3_JOB_NAME=eval3_v17_camdrop_50k \
 
 - `expandable_segments:True` is required at batch 256 — same constraint as
   v16. If it OOMs, drop to `EVAL3_BATCH=128`.
+
+### 3.8 The "big-zoo + v4-anchored" recipe (current full-training target)
+
+The production recipe combines all three real/synth identity slates AND
+anchors training on the 9 real `dataset_v4_*` repos at **28 %** sampling weight
+via `EVAL3_V17_V4_REPLICAS=15`. Active settings (deltas vs the launcher
+defaults shown in bold):
+
+| Knob | Value | Rationale |
+|---|---|---|
+| Batch size | **`EVAL3_BATCH=128`** | Half of the 50k recipe. v4 replication multiplies dataset_count, not GPU memory; batch=128 stays well below A100-80GB limit even with v4 ×15 + 102 algvr + 90 pins30q5 = 237 LeRobotDataset wrappers. |
+| Output dir | **`EVAL3_TRAIN_OUT=./outputs/v17`** | Local relative path (not `/ephemeral/`). Persistent across container restarts. |
+| Job name | **`EVAL3_JOB_NAME=eval3_v17_v4anchored`** | Distinguishes from the default `eval3_v17_camdrop` job. |
+| Corpus base | **`EVAL3_V17_NO_SYNTH=1`** | Drops v3 synthetic. Identity diversity already covered by algvr + pins30q5. |
+| Real anchor | **`EVAL3_V17_V4_REPLICAS=15`** | v4 × 15 ≈ 28 % of the union (vs ~2.5 % uncorrected). |
+| Algvr add-on | `EVAL3_V17_INCLUDE_ALGVR=1` | 102 datasets, ~599k frames at M=6 |
+| Pins30q5 add-on | `EVAL3_V17_INCLUDE_PINS30Q5=1` | 90 datasets, ~666k frames at N=5 M=3 |
+| Steps | `EVAL3_TRAIN_STEPS=50000` | full recipe |
+| Save freq | `EVAL3_SAVE_FREQ=1000` | 50 ckpts over the run |
+| State noise σ_min | **`EVAL3_STATE_NOISE_SIGMA_MIN=0.05`** | Down from 0.15. Lets the curriculum end at a much smaller floor, giving the action expert tighter proprio at convergence. Curriculum still starts at σ_max=0.7. |
+| All other state knobs | defaults | σ_max=0.7, replace_prob=0.65, postgrasp_mult=4.0, etc. |
+| Cam-drop knobs | defaults | ep_p=0.35, frame_p=0.10, post_mult=3.0 |
+| Slot bottleneck | defaults | weight=0.5, K=4 token repeat, frame-0 on, pre-grasp-only CE |
+| Optimizer | defaults | AdamW, peak LR=1e-4, decay LR=1e-6, 250 warmup, cosine schedule |
+| Val watcher | **on**, holdout slate, sidecar wandb | See §4.1; uses `dataset_v5_synth_holdout_*_full` (§3.7) |
+
+Final frame budget at this recipe:
+
+| Component | Datasets | Frames | Share |
+|---|---|---|---|
+| v4 real × 15 | 9 × 15 = 135 | ~497k | **28.1 %** |
+| algvr (M=6) | 102 | ~599k | 33.9 % |
+| pins30q5 (N=5,M=3) | 90 | ~671k | 38.0 % |
+| **Total** | **327** | **~1.77 M** | 100 % |
+
+Paste-ready command (with val watcher + wandb sidecar):
+
+```bash
+HOLDOUT_REPOS=$(ls -d datasets/dataset_v5_synth_holdout_*_full | sed 's|datasets/|RobotLearningVLA/|' | paste -sd, -)
+PROMPTS=$(cat /tmp/holdout_prompts.json)
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+EVAL3_TRAIN_STEPS=50000 EVAL3_BATCH=128 EVAL3_SAVE_FREQ=1000 EVAL3_WANDB=1 \
+EVAL3_TRAIN_OUT=./outputs/v17 \
+EVAL3_JOB_NAME=eval3_v17_v4anchored \
+EVAL3_WANDB_PROJECT=eval3-v17-camdrop \
+EVAL3_V17_NO_SYNTH=1 \
+EVAL3_V17_V4_REPLICAS=15 \
+EVAL3_V17_INCLUDE_ALGVR=1 \
+EVAL3_V17_INCLUDE_PINS30Q5=1 \
+EVAL3_STATE_NOISE_SIGMA_MIN=0.05 \
+EVAL3_VAL_WATCH=1 EVAL3_VAL_DEVICE=cuda EVAL3_VAL_WANDB=1 \
+EVAL3_VAL_REPOS="$HOLDOUT_REPOS" EVAL3_VAL_LOCAL_REPOS="$HOLDOUT_REPOS" \
+EVAL3_VAL_PROMPTS="$PROMPTS" \
+EVAL3_VAL_EPISODES_PER_REPO=3 EVAL3_VAL_FRAMES_PER_EPISODE=30 \
+EVAL3_VAL_POLL_SEC=60 EVAL3_VAL_IDLE_SEC=1800 \
+  ./scripts/run_eval3_smolvla_v17_real_data_slot_train.sh --log_freq=100
+```
+
+Why this recipe — design intent:
+
+1. **v4 at 28 %** anchors the action expert on real teleop trajectories so the
+   policy doesn't drift toward synthetic motion priors. 28 % is high enough
+   that the prefix check's per-camera real-vs-noise mix stays realistic but
+   not so high that the synthetic identity diversity gets washed out.
+2. **algvr + pins30q5** together expose ~64 unique identities (algvr 34 +
+   pins30q5 30) at different per-celeb sampling densities — algvr is broad
+   but shallow (1–2 photos × 6 distractors), pins30q5 is narrow but deep
+   (5 photos × 3 distractors). Combined, the slot bottleneck has to ground
+   the language→slot binding across a wide face distribution.
+3. **σ_min=0.05** lowers the state-noise floor at convergence: the curriculum
+   stays aggressive early (σ_max=0.7) but the final samples see proprio that
+   is much closer to clean, which the policy needs at inference time when
+   the SO-101 reports actual joint positions.
+4. **No v3 synthetic** — the v3_synth_pinned_idood corpus only covers Swift /
+   LeCun / Obama. Identity coverage is now better served by algvr+pins30q5,
+   and removing v3 frees up sampling weight for the new slates without
+   another replication boost.
 
 ### Camera-1 drop knobs (defaults)
 

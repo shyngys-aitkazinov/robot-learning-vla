@@ -69,6 +69,20 @@
 #                                  from pins-face-recognition-top30-quality.json + v5
 #                                  charuko sources; up to 90 datasets / ~1350 eps /
 #                                  ~640k frames at the default N=5 / M=3 knobs)
+#
+# Sampling-weight knob (independent of corpus toggles):
+#   EVAL3_V17_V4_REPLICAS=N    -> Repeat each of the 9 dataset_v4_* repos N times
+#                                  in EXTRA_REPOS. Because eval3_concat_patch builds
+#                                  one LeRobotDataset per entry and ConcatLeRobotDataset
+#                                  samples uniformly across the union, listing v4 N
+#                                  times raises its effective sample weight from
+#                                  ~3% (when algvr+pins30q5 are on) to ~28% at N=15.
+#                                  Default 1 = unchanged. Recommended: N=7 for
+#                                  v4+algvr only, N=15 for v4+algvr+pins30q5.
+#                                  Memory cost is negligible — duplicate datasets
+#                                  share the on-disk parquet/mp4 files; the only
+#                                  extra is N copies of the in-memory frame-0 cache
+#                                  (~10 MB per repo at N=15 → ~90 MB total).
 #   EVAL3_WANDB=1  EVAL3_WANDB_PROJECT=eval3-v17-camdrop
 #   EVAL3_DRY_RUN=0
 #
@@ -180,6 +194,20 @@ fi
 
 # ---- Corpus selection ------------------------------------------------------
 
+# Optional: replicate the v4 real corpus N times to boost its sampling weight
+# in the concatenated dataset (see EVAL3_V17_V4_REPLICAS header doc above).
+# N>=2: the primary remains REAL_PRIMARY (counted once), and EXTRA_REPOS gets
+# (REAL_PRIMARY,REAL_EXTRAS) repeated (N-1) times on top of the base extras.
+V4_REPLICAS="${EVAL3_V17_V4_REPLICAS:-1}"
+REAL_ALL_ONCE="${REAL_PRIMARY},${REAL_EXTRAS}"
+REAL_REPLICATED_EXTRAS=""
+if [[ "$V4_REPLICAS" -ge 2 ]]; then
+  # (N-1) extra copies of (REAL_PRIMARY + REAL_EXTRAS), comma-joined.
+  for ((i = 1; i < V4_REPLICAS; i++)); do
+    REAL_REPLICATED_EXTRAS="${REAL_REPLICATED_EXTRAS:+$REAL_REPLICATED_EXTRAS,}${REAL_ALL_ONCE}"
+  done
+fi
+
 if [[ "${EVAL3_V17_SYNTH_ONLY:-0}" == "1" ]]; then
   REPO="$SYNTH_PRIMARY"
   EXTRA_REPOS="$SYNTH_EXTRAS"
@@ -192,6 +220,12 @@ else
   REPO="$REAL_PRIMARY"
   EXTRA_REPOS="${REAL_EXTRAS},${SYNTH_ALL}"
   LOCAL_REPOS="$SYNTH_ALL"
+fi
+
+# Append the (N-1) replicated v4 copies if requested. Append AFTER the base
+# extras + before any add-ons so the dedup-aware concat sees consistent order.
+if [[ -n "$REAL_REPLICATED_EXTRAS" ]]; then
+  EXTRA_REPOS="${EXTRA_REPOS},${REAL_REPLICATED_EXTRAS}"
 fi
 
 if [[ "${EVAL3_V17_INCLUDE_V2:-0}" == "1" ]]; then
@@ -303,6 +337,9 @@ elif [[ "${EVAL3_V17_NO_SYNTH:-0}" == "1" ]]; then
   echo "     mode             : REAL-ONLY (9 dataset_v4_*)"
 else
   echo "     mode             : REAL + SYNTH (9 dataset_v4_* + 9 dataset_v3_synth_pinned_idood_*_3)"
+fi
+if [[ "$V4_REPLICAS" -ge 2 ]]; then
+  echo "     v4 replicas      : x$V4_REPLICAS (boosts v4 sampling weight in concat)"
 fi
 [[ "${EVAL3_V17_INCLUDE_V2:-0}" == "1" ]] && echo "     v2 add-on        : +9 legacy dataset_v2_*"
 if [[ "${EVAL3_V17_INCLUDE_ALGVR:-0}" == "1" ]]; then
