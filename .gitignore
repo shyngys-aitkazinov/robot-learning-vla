@@ -28,6 +28,8 @@ third_party/
 # Ignore everything under datasets/ except the README and the small metadata JSON
 # that the post-processor consumes (built by tools/build_pins_metadata.py).
 datasets/*
+!datasets/celeb_refdb/
+!datasets/celeb_refdb/**
 !datasets/README.md
 !datasets/pins-face-recognition.json
 !datasets/pins-face-recognition-top30.json

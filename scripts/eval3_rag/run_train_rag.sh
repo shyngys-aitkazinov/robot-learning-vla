@@ -292,7 +292,7 @@ RENAMES='{"observation.images.front":"observation.images.camera1","observation.i
 # with RandomErasing at low strength to prevent texture overfitting.
 TFS_JSON='{"brightness":{"weight":2.0,"type":"ColorJitter","kwargs":{"brightness":[0.7,1.3]}},"contrast":{"weight":2.0,"type":"ColorJitter","kwargs":{"contrast":[0.7,1.3]}},"saturation":{"weight":1.0,"type":"ColorJitter","kwargs":{"saturation":[0.5,1.5]}},"hue":{"weight":1.0,"type":"ColorJitter","kwargs":{"hue":[-0.05,0.05]}},"sharpness":{"weight":1.0,"type":"SharpnessJitter","kwargs":{"sharpness":[0.5,1.5]}},"affine":{"weight":1.0,"type":"RandomAffine","kwargs":{"degrees":[-3.0,3.0],"translate":[0.03,0.03]}},"perspective":{"weight":0.75,"type":"RandomPerspective","kwargs":{"distortion_scale":0.1,"p":0.3}},"resized_crop":{"weight":1.0,"type":"RandomResizedCrop","kwargs":{"size":[480,640],"scale":[0.85,1.0],"ratio":[0.95,1.05]}},"gaussian_blur":{"weight":0.5,"type":"GaussianBlur","kwargs":{"kernel_size":[5,9],"sigma":[0.3,1.0]}},"erase":{"weight":0.25,"type":"RandomErasing","kwargs":{"p":0.15,"scale":[0.02,0.05]}}}'
 export EVAL3_TFS_JSON="${EVAL3_TFS_JSON:-$TFS_JSON}"
-export EVAL3_NUM_WORKERS="${EVAL3_NUM_WORKERS:-16}"
+export EVAL3_NUM_WORKERS="${EVAL3_NUM_WORKERS:-44}"
 
 # ── multi-GPU launcher ────────────────────────────────────────────────────
 # torchrun spawns one process per GPU; each applies all monkey-patches
@@ -315,11 +315,15 @@ echo "   peak_lr      : $PEAK_LR  (from eff_batch=$EFF_BATCH, same dynamics as v
 echo "   warmup/decay : $WARMUP / $DECAY  decay_lr=$DECAY_LR"
 echo "   freeze_vision: true  train_expert_only: true  use_amp: true  compile: true"
 echo "   out          : $OUT"
+echo "   hf_repo      : ${EVAL3_HF_REPO_ID:-${HF_ORG}/${JOB}-smolvla-${STEPS}}"
 echo "   rename       : $RENAMES"
+
+HF_REPO_ID="${EVAL3_HF_REPO_ID:-${HF_ORG}/${JOB}-smolvla-${STEPS}}"
 
 exec "${LAUNCHER[@]}" scripts/eval3_rag/train_rag.py \
   --policy.path="$POLICY_PATH" \
-  --policy.push_to_hub=false \
+  --policy.push_to_hub=true \
+  --policy.repo_id="$HF_REPO_ID" \
   --policy.compile_model=true \
   --policy.device="$DEVICE" \
   --policy.empty_cameras=1 \
@@ -350,4 +354,5 @@ exec "${LAUNCHER[@]}" scripts/eval3_rag/train_rag.py \
   --steps="$STEPS" \
   --save_freq="$SAVE_FREQ" \
   --batch_size="$BATCH" \
+  --num_workers="$EVAL3_NUM_WORKERS" \
   "$@"
