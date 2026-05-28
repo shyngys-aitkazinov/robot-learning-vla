@@ -66,6 +66,22 @@
 #                                the default M=3 generator knob)
 #   EVAL3_WANDB=1  EVAL3_WANDB_PROJECT=eval3-v17-camdrop
 #   EVAL3_DRY_RUN=0
+#
+# Held-out validation watcher (OPT-IN; default OFF). When EVAL3_VAL_WATCH=1
+# AND EVAL3_VAL_REPOS is set, this launcher backgrounds tools/eval3_val_watcher.py
+# alongside training. The watcher polls $OUT/checkpoints/ and scores each
+# new checkpoint on the held-out LeRobot-format datasets you list, writing
+# JSONL metrics to $OUT/val_metrics.jsonl. See docs/eval3/v17_playbook.md
+# §4.1 for details.
+#   EVAL3_VAL_WATCH=0                  # set to 1 to enable
+#   EVAL3_VAL_REPOS=org/name,org/other # required; comma-separated repo list
+#   EVAL3_VAL_LOCAL_REPOS=             # subset to load from ./datasets/<name>
+#   EVAL3_VAL_EPISODES_PER_REPO=3      # episodes sampled per val repo
+#   EVAL3_VAL_FRAMES_PER_EPISODE=30    # frames per episode (uniform stride)
+#   EVAL3_VAL_DEVICE=mps               # cpu/mps/cuda; defaults to EVAL3_POLICY_DEVICE
+#   EVAL3_VAL_POLL_SEC=60              # checkpoint poll interval
+#   EVAL3_VAL_IDLE_SEC=600             # stop after N seconds of no new ckpt
+#   EVAL3_VAL_WANDB=0                  # 1 -> sidecar wandb run "<job>_val"
 
 set -euo pipefail
 
@@ -279,6 +295,21 @@ echo "   output dir            : $OUT"
 if [[ "${EVAL3_DRY_RUN:-0}" == "1" ]]; then
   echo ">> EVAL3_DRY_RUN=1; not starting training."
   exit 0
+fi
+
+# ---- Optional held-out validation watcher ----------------------------------
+# Backgrounds tools/eval3_val_watcher.py which polls $OUT/checkpoints/ and
+# scores each new ckpt on EVAL3_VAL_REPOS. JSONL -> $OUT/val_metrics.jsonl.
+if [[ "${EVAL3_VAL_WATCH:-0}" == "1" && -n "${EVAL3_VAL_REPOS:-}" ]]; then
+  mkdir -p outputs/train/logs
+  VAL_LOG="outputs/train/logs/${JOB}_val_watch.log"
+  nohup python tools/eval3_val_watcher.py \
+    --train-out "$OUT" \
+    --final-step "$STEPS" \
+    > "$VAL_LOG" 2>&1 &
+  echo ">> val watcher backgrounded (pid $!) — log: $VAL_LOG"
+elif [[ "${EVAL3_VAL_WATCH:-0}" == "1" ]]; then
+  echo "WARN EVAL3_VAL_WATCH=1 but EVAL3_VAL_REPOS is empty — watcher NOT started." >&2
 fi
 
 # Same image transforms as v15/v16. Applied to BOTH cam1 and cam2 before
