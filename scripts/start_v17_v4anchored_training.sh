@@ -61,7 +61,19 @@ if [[ -z "$HOLDOUT_REPOS" ]]; then
 fi
 PROMPTS=$(cat "$PROMPTS_JSON")
 
-mkdir -p outputs/v17 outputs/train/logs
+# LeRobot train.cfg.validate() refuses to overwrite an existing output dir
+# (resume=false). Do NOT pre-create EVAL3_TRAIN_OUT — let lerobot_train create
+# it itself.
+mkdir -p outputs/train/logs
+if [[ -d outputs/v17 ]]; then
+  if [[ -z "$(ls -A outputs/v17 2>/dev/null)" ]]; then
+    rmdir outputs/v17  # empty leftover (e.g. from a prior pre-mkdir bug)
+  else
+    echo "ERROR: outputs/v17 already exists and is non-empty." >&2
+    echo "       LeRobot refuses to overwrite. Move or delete it manually." >&2
+    exit 3
+  fi
+fi
 
 CMD=(
   env
