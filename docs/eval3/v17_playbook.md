@@ -67,12 +67,13 @@ cam2.
 | Default corpus | 9 real `dataset_v4_*` + 9 synthetic `dataset_v3_synth_pinned_idood_*_3` (18 datasets, ~212k frames / 449 episodes) |
 | Optional add-on (v2) | `EVAL3_V17_INCLUDE_V2=1` → also concat 9 legacy `dataset_v2_*` repos (~5k frames extra real signal) |
 | Optional add-on (algvr) | `EVAL3_V17_INCLUDE_ALGVR=1` → also concat **all local** `dataset_v5_synth_algvr_*_full` (up to 102 datasets, ~296k frames / ~594 episodes — algvr.com conference identity diversity, see §3.5) |
+| Optional add-on (pins30q5) | `EVAL3_V17_INCLUDE_PINS30Q5=1` → also concat **all local** `dataset_v5_synth_pins30q5_*_full` (up to 90 datasets, ~640k frames / ~1350 episodes — PINS top-30 quality-filtered identity diversity, see §3.6) |
 | Steps / batch | default 10,000 / 128; full-recipe target 50,000 / 256 |
 | Init | fresh from `lerobot/smolvla_base` |
 | Output | `/ephemeral/outputs/train/eval3_v17_camdrop` |
 | wandb | project `eval3-v17-camdrop` |
 
-### Corpus modes (one base mode at a time; `INCLUDE_V2` / `INCLUDE_ALGVR` are additive)
+### Corpus modes (one base mode at a time; `INCLUDE_V2` / `INCLUDE_ALGVR` / `INCLUDE_PINS30Q5` are additive)
 
 | Mode | Env | Datasets | Frames | Use case |
 |---|---|---|---|---|
@@ -80,8 +81,8 @@ cam2.
 | Real-only | `EVAL3_V17_NO_SYNTH=1` | 9 real v4 | ~31k | Tighter distribution; smoke runs |
 | Synth-only | `EVAL3_V17_SYNTH_ONLY=1` | 9 synth v3_3 | ~180k | Isolate synth contribution |
 | + v2 add-on | `EVAL3_V17_INCLUDE_V2=1` | (above) + 9 legacy v2 | +~5k | Extra real signal |
-| + algvr add-on | `EVAL3_V17_INCLUDE_ALGVR=1` | (above) + up to 102 local `dataset_v5_synth_algvr_*_full` | +~296k | Identity diversity — 34 academic faces from `algvr-conference.json` warped onto v5 charuko boards (see §3.5) |
-| + pins30 add-on | _**manual `EVAL3_LOCAL_REPOS` for now**_ — see §3.6 | (above) + up to 90 local `dataset_v5_synth_*_full_pins30` | varies with M | Globally-recognisable identity diversity — 30 Pins celebs (Ronaldo, Swift, Bezos, …), quality-ranked and B&W-penalised, warped onto v5 charuko boards (see §3.6). Launcher toggle is an open item. |
+| + algvr add-on | `EVAL3_V17_INCLUDE_ALGVR=1` | (above) + up to 102 local `dataset_v5_synth_algvr_*_full` | +~296k | Identity diversity — 34 academic faces from `algvr-conference.json` warped onto v5 charuko boards (see §3.5). At default M=6 the per-celeb identity exposure is small (~1–2 photos × 6 distractors) so this slate's main signal is **distractor breadth**. |
+| + pins30q5 add-on | `EVAL3_V17_INCLUDE_PINS30Q5=1` | (above) + up to 90 local `dataset_v5_synth_pins30q5_*_full` | +~640k | Globally-recognisable identity diversity — 30 Pins celebs (Ronaldo, Swift, Bezos, …) × 5 best **quality-ranked, B&W-penalised** photos each, warped onto v5 charuko boards (see §3.6). Per-celeb exposure is **dense** (5 photos × 3 distractors); complements the algvr slate's breadth. |
 
 ### Launch / relaunch
 
@@ -160,10 +161,12 @@ EVAL3_V17_INCLUDE_ALGVR=1 \
 EVAL3_V17_INCLUDE_V2=1 EVAL3_V17_INCLUDE_ALGVR=1 \
   ./scripts/run_eval3_smolvla_v17_real_data_slot_train.sh
 
-# Pins-quality slate added manually (§3.6); 30 globally-recognisable celebs
-EVAL3_LOCAL_REPOS="$(ls -d datasets/dataset_v5_synth_*_full_pins30 \
-    | sed 's@datasets/@RobotLearningVLA/@' | paste -sd, -)" \
-EVAL3_EXTRA_REPOS="$EVAL3_LOCAL_REPOS" \
+# Dense per-celeb identity coverage: add the 90 pins-top30-quality datasets
+EVAL3_V17_INCLUDE_PINS30Q5=1 \
+  ./scripts/run_eval3_smolvla_v17_real_data_slot_train.sh
+
+# Big identity zoo: real + v3 synth + algvr (breadth) + pins30q5 (depth)
+EVAL3_V17_INCLUDE_ALGVR=1 EVAL3_V17_INCLUDE_PINS30Q5=1 \
   ./scripts/run_eval3_smolvla_v17_real_data_slot_train.sh
 ```
 
@@ -209,28 +212,34 @@ The v17 launcher **discovers them by glob at runtime**
 when you regenerate with different scope. If the toggle is set but no
 datasets are found, the launcher warns and continues without them.
 
-### 3.6 Pins-quality synthetic slate (`EVAL3_V17_INCLUDE_PINS30=1`)
+### 3.6 PINS top-30-quality synthetic slate (`EVAL3_V17_INCLUDE_PINS30Q5=1`)
 
 A 5th, fully **opt-in + local-only** slate that injects 30 globally-recognisable
-celebrities (Pins-Face-Recognition top-30) onto the v5\_charuko\_full charuco
-boards. Useful when you want identity diversity beyond the 3 TOY celebs (Swift /
-Obama / LeCun) and beyond the 34 academic faces in the algvr slate, with the
-photos already **quality-ranked and B&W-penalised** so the print images are
-high-res colour portraits rather than the raw Pins mix (median 185 px, ~20%
-B&W / multi-face).
+celebrities (Pins-Face-Recognition top-30 — Ronaldo, Swift, Bezos, …) onto the
+`v5_charuko_*_full` boards. Complement to slate §3.5 (algvr): where algvr is
+**broad but shallow** (34 academic faces × 1–2 photos), pins30q5 is **focused
+but deep** (30 celebs × 5 best-quality photos each), with the photos already
+**quality-ranked and B&W-penalised** so the print images are high-res colour
+portraits rather than the raw Pins mix (median 185 px, ~20% B&W / multi-face).
 
-**Generated by**: `tools/eval3_synth_pins_dataset_gen.py` driven by
-`tools/pins_quality_filter.py`'s output JSON.
+Useful for stress-testing whether the slot bottleneck + cam1 drop still
+generalise the **identity→slot** binding when the same celeb appears in many
+different photos of the same face.
+
+**Generated by**: `scripts/run_eval3_synth_pins30q5_dataset_gen.sh`
+(thin env-var wrapper around `tools/eval3_synth_pins_dataset_gen.py`, driven
+by `tools/pins_quality_filter.py`'s output JSON; see also
+`docs/eval3/charuco_pipeline.md` for the underlying warp pipeline).
 
 | | |
 |---|---|
-| Pool | `datasets/pins-face-recognition-top30-quality.json` (30 celebs × top-10 photos each, ranked best-first) |
-| Sources | `datasets/dataset_v5_charuko_{left,middle,right}_full` (same as §3.5) |
-| Output naming | `dataset_v5_synth_<celeb_slug>_<position>_full_pins30` |
-| Default scale | 30 × 3 = **90 datasets**, N×M = 10×50 = **500 episodes per dataset** ⇒ ~45k episodes total (size depends on M; with M=3 it's ~525 episodes total / ~1.4 GB, matching the algvr-default footprint) |
+| Pool | `datasets/pins-face-recognition-top30-quality.json` (30 celebs, median ~35 `quality_photos` each — best-first sorted by `tools/pins_quality_filter.py`) |
+| Sources | `datasets/dataset_v5_charuko_{left,middle,right}_full` (shared with the algvr slate) |
+| Output naming | `dataset_v5_synth_pins30q5_<celeb_slug>_<position>_full` |
+| Default scale | 30 × 3 = **90 datasets**, ~1350 episodes, ~640k frames, **~3–4 GB** (generator default N=5 target photos × M=3 distractor scenes per target photo) |
 | Task strings | One per dataset, `"Place the coke on <Canonical Name>"` (e.g. `"Place the coke on Cristiano Ronaldo"`) |
-| Schema | LeRobot v3.0, identical to the algvr slate |
-| Push to Hub | **No** by default — keep local under `./datasets/` so `eval3_concat_patch` reads from disk via `EVAL3_LOCAL_REPOS`. Add `--push-to-hub` if you want them on `RobotLearningVLA/`. |
+| Schema | LeRobot v3.0 — identical to algvr / v4 / v3 synth: 6-DOF `action`/`observation.state`, 480×640 `observation.images.front`, fps=30 |
+| Push to Hub | **No** by default — local-only discovery via glob, identical pattern to algvr. Add `--push-to-hub` to the wrapper if you want them on `RobotLearningVLA/`. |
 
 #### Pool prep — rebuild the quality JSON when the source pool or scorer changes
 
@@ -264,76 +273,60 @@ Known scorer limits:
   frame can slip past the single-face filter. Swap in MediaPipe Face Detection
   or RetinaFace in `_detect_faces` if it bites.
 - **No text-overlay detection** — meme images with caption text rank as normal
-  photos (this is what gives Morgan Freeman's new top-1 the "AVE TO FEAR IS…"
-  caption). Add Tesseract / PaddleOCR at the top of `_score_one_photo` if
-  needed.
+  photos. Add Tesseract / PaddleOCR at the top of `_score_one_photo` if needed.
 
-#### Generate — full pins30 sweep on v5 sources
+#### Generate — recipes
 
 ```bash
-# Recommended: matches the algvr slate's source/output conventions
-python tools/eval3_synth_pins_dataset_gen.py \
-    --pool-json datasets/pins-face-recognition-top30-quality.json \
-    --source-prefix dataset_v5_charuko_ --source-suffix _full \
-    --output-prefix dataset_v5_synth_  --output-postfix _full \
-    --output-suffix pins30 \
-    --target-celebs all --target-positions left,middle,right \
-    --max-photos-per-celeb 10 --distractors-per-target-photo 50 \
-    --n-workers $(nproc) --vcodec h264 --seed 42 --overwrite
+# Default (matches what the launcher's INCLUDE_PINS30Q5=1 glob expects):
+# 90 datasets, N=5 target photos × M=3 distractor scenes = 15 eps/dataset.
+./scripts/run_eval3_synth_pins30q5_dataset_gen.sh
+
+# Subset (e.g. only sports figures, all 3 slots)
+EVAL3_PINS30Q5_CELEBS=cristiano_ronaldo,lionel_messi,roger_federer \
+  ./scripts/run_eval3_synth_pins30q5_dataset_gen.sh
+
+# Deeper identity coverage (more target photos + more distractors -> ~10 GB)
+EVAL3_PINS30Q5_N=10 EVAL3_PINS30Q5_M=10 EVAL3_PINS30Q5_OVERWRITE=1 \
+  ./scripts/run_eval3_synth_pins30q5_dataset_gen.sh
+
+# Quick smoke (1 celeb × 1 slot, ~5 min)
+EVAL3_PINS30Q5_CELEBS=cristiano_ronaldo EVAL3_PINS30Q5_POSITIONS=left \
+EVAL3_PINS30Q5_N=4 EVAL3_PINS30Q5_M=5 EVAL3_PINS30Q5_OVERWRITE=1 \
+  ./scripts/run_eval3_synth_pins30q5_dataset_gen.sh
 ```
 
-For a quick smoke (1 celeb × 1 slot, ~5 min):
+The legacy `scripts/run_eval3_synth_pins_dataset_gen.sh` wrapper still exists
+and targets the older v3 charuco sources (output `dataset_v3_synth_pins30_<celeb>_<pos>_2`);
+it is **not** wired into the v17 launcher and is kept only for backward
+compatibility with the existing `pins10eval_*` Hub family.
 
-```bash
-python tools/eval3_synth_pins_dataset_gen.py \
-    --pool-json datasets/pins-face-recognition-top30-quality.json \
-    --source-prefix dataset_v5_charuko_ --source-suffix _full \
-    --output-prefix dataset_v5_synth_  --output-postfix _full \
-    --output-suffix pins30 \
-    --target-celebs cristiano_ronaldo --target-positions left \
-    --max-photos-per-celeb 4 --distractors-per-target-photo 5 \
-    --overwrite
-```
+#### Knobs (env-var wrapper → underlying `tools/eval3_synth_pins_dataset_gen.py` CLI)
 
-Or via the existing wrapper script (uses v3 charuco sources, default outputs
-`dataset_v3_synth_pins30_<celeb>_<pos>_2` instead of the `_full` naming):
-
-```bash
-./scripts/run_eval3_synth_pins_dataset_gen.sh --dry-run            # plan only
-EVAL3_PINS_PUSH_TO_HUB=1 ./scripts/run_eval3_synth_pins_dataset_gen.sh
-```
-
-The wrapper auto-detects `datasets/pins-face-recognition-top30-quality.json`
-when present and falls back to the unfiltered top-30 JSON otherwise — set
-`EVAL3_PINS_POOL_JSON` to override.
-
-#### Knobs (CLI-only on the python tool; wrapper env-var equivalents in parens)
-
-| Flag (CLI) | Wrapper env | Default | Effect |
+| Wrapper env | CLI flag | Default | Effect |
 |---|---|---|---|
-| `--max-photos-per-celeb` | `EVAL3_PINS_MAX_PHOTOS` | 10 | Top-N photos per celeb from the quality JSON. Drop to 4 for max quality, raise for more variety. |
-| `--distractors-per-target-photo` | `EVAL3_PINS_DISTRACTORS_PER_TARGET` | 50 | Distractor scenes per target photo (size scales as `N × M`). |
-| `--output-suffix` | `EVAL3_PINS_OUTPUT_SUFFIX` | `pins30` | Name tag; bump if you want pins runs not to clobber each other. |
-| `--n-workers` | `EVAL3_PINS_WORKERS` | `nproc` | One worker per output dataset. On Apple Silicon use 8; on Brev box use full nproc. |
-| `--push-to-hub` | `EVAL3_PINS_PUSH_TO_HUB` | off | Upload + create `v3.0` tag per dataset. |
-| `--overwrite` | `EVAL3_PINS_OVERWRITE` | off | Replace existing output dirs. |
-| `--source-prefix` / `--source-suffix` | (CLI only) | `dataset_v3_charuco_` / `_2` | Switch trajectory base — use `dataset_v5_charuko_` / `_full` for v17. |
+| `EVAL3_PINS30Q5_N` | `--max-photos-per-celeb` | 5 | Top-N photos per celeb from the quality JSON. Drop to 3 for max quality, raise for more variety. |
+| `EVAL3_PINS30Q5_M` | `--distractors-per-target-photo` | 3 | Distractor scenes per target photo (size scales as `N × M`). |
+| `EVAL3_PINS30Q5_CELEBS` | `--target-celebs` | `all` | Comma-separated slugs OR `all` (= every celeb in the pool). |
+| `EVAL3_PINS30Q5_POSITIONS` | `--target-positions` | `left,middle,right` | Subset of slot positions to generate. |
+| `EVAL3_PINS30Q5_WORKERS` | `--n-workers` | `0` (= `nproc`, capped at n_datasets) | One worker per output dataset. |
+| `EVAL3_PINS30Q5_VCODEC` | `--vcodec` | `h264` | Video codec for the per-episode MP4. |
+| `EVAL3_PINS30Q5_SEED` | `--seed` | 42 | Per-dataset seed = `seed XOR hash(celeb, position)`. |
+| `EVAL3_PINS30Q5_PUSH_TO_HUB` | `--push-to-hub` | off | Upload + create `v3.0` tag per dataset. |
+| `EVAL3_PINS30Q5_OVERWRITE` | `--overwrite` | off | Replace existing output dirs. |
+| `EVAL3_PINS30Q5_POOL_JSON` | `--pool-json` | `datasets/pins-face-recognition-top30-quality.json` | Pool to sample from. |
 
-#### Train-time wiring (NOT YET in the launcher)
+The launcher **discovers the slate by glob at runtime**
+(`datasets/dataset_v5_synth_pins30q5_*_full`) — no need to edit the launcher
+when you regenerate with different scope. If the toggle is set but no
+datasets are found, the launcher warns and continues without them.
 
-The v17 launcher does NOT currently grep for `dataset_v5_synth_*_full_pins30`
-the way it does for the algvr slate. Until that wiring lands, point at the
-slate manually:
-
-```bash
-EVAL3_LOCAL_REPOS="$(ls -d datasets/dataset_v5_synth_*_full_pins30 \
-    | sed 's@datasets/@RobotLearningVLA/@' | paste -sd, -)" \
-EVAL3_EXTRA_REPOS="$EVAL3_LOCAL_REPOS,<existing extras…>" \
-  ./scripts/run_eval3_smolvla_v17_real_data_slot_train.sh
-```
-
-See §9 "Open items" — there's a placeholder for adding a dedicated
-`EVAL3_V17_INCLUDE_PINS30=1` toggle that mirrors `EVAL3_V17_INCLUDE_ALGVR=1`.
+**Design intent — combine algvr + pins30q5 to mix breadth and depth.** algvr
+exposes ~1–2 photos per face × many distractors (broad identity zoo, light
+per-celeb sampling); pins30q5 exposes 5 photos per face × few distractors
+(focused, repeated identity exposure). Stacked together the policy sees ~64
+unique faces with mixed exposure densities and ~190 new (celeb, position)
+tuples on top of the v4 / v3 synth base.
 
 ## 4. Monitoring
 
@@ -816,6 +809,8 @@ python tools/eval3_check_deploy_command.py \
 | `EVAL3_LOCAL_REPOS` repo not found | one of the synth `_3` dataset dirs is missing under `./datasets/`. Either fetch them or use `EVAL3_V17_NO_SYNTH=1`. |
 | `WARN EVAL3_V17_INCLUDE_ALGVR=1 but no datasets/dataset_v5_synth_algvr_*_full found` | The algvr slate is empty. Build it first: `./scripts/run_eval3_synth_algvr_dataset_gen.sh` (~30 min, ~1.5 GB local), or drop the toggle. |
 | Algvr-included run has wildly different `loss` curve from default | Expected — algvr adds ~296k frames / 34 new identities, ~2.4× the v17 default frame budget. Adjust `EVAL3_TRAIN_STEPS` (or `EVAL3_BATCH`) if you want the same wall-clock to cover the same fraction of epochs. |
+| `WARN EVAL3_V17_INCLUDE_PINS30Q5=1 but no datasets/dataset_v5_synth_pins30q5_*_full found` | The pins30q5 slate is empty. Build it first: `./scripts/run_eval3_synth_pins30q5_dataset_gen.sh` (~30–60 min on 16 cores, ~3–4 GB local), or drop the toggle. |
+| Pins30q5-included run shifts loss curve substantially | Expected — pins30q5 adds ~640k frames / 30 identities, ~3× the v17 default frame budget; combined with algvr that's ~4.4× total. Re-tune `EVAL3_TRAIN_STEPS` to keep epoch coverage comparable. |
 | `WARN EVAL3_VAL_WATCH=1 but EVAL3_VAL_REPOS is empty — watcher NOT started.` | Set `EVAL3_VAL_REPOS=...` alongside `EVAL3_VAL_WATCH=1`. The launcher refuses to start an unconfigured watcher. |
 | Val watcher's `slot_acc=null` (or `None`) for every repo | Repo names don't match the `_left_/_middle_/_right_` regex. Rename val repos or accept that slot_acc is unavailable — the other 3 metrics still work. See §4.1 "Val dataset naming convention". |
 | Val watcher's `prompt_nearest_accuracy=null` for some repos | Repo name doesn't match a known identity (`taylor`/`yann`/`barack`). Add the identity slug + prompt via `EVAL3_VAL_PROMPTS` JSON (see §4.1 "Custom prompts"). |
@@ -872,11 +867,12 @@ python tools/eval3_val_watcher.py \
 - `tools/eval3_v16_dataset_test.py` — 73-check robustness suite (D + C + E phases)
 - `docs/eval3/v16_playbook.md` — companion playbook for the v16 slot bottleneck (architectural prerequisite)
 - `scripts/run_eval3_synth_algvr_dataset_gen.sh` — builds the algvr-conference synth slate consumed by `EVAL3_V17_INCLUDE_ALGVR=1` (see §3.5)
-- `tools/eval3_synth_pins_dataset_gen.py` — Pins-pool generator the algvr launcher wraps (accepts `--source-prefix` / `--source-suffix` / `--output-prefix` / `--output-postfix` so it can target v5 charuko sources)
-- `scripts/run_eval3_synth_pins_dataset_gen.sh` — env-var wrapper around the same generator with v3 charuco defaults; auto-detects the quality JSON (§3.6)
+- `scripts/run_eval3_synth_pins30q5_dataset_gen.sh` — builds the PINS top-30-quality synth slate consumed by `EVAL3_V17_INCLUDE_PINS30Q5=1` (see §3.6); same wrapper structure as the algvr generator
+- `tools/eval3_synth_pins_dataset_gen.py` — Pins-pool generator the algvr / pins30q5 launchers wrap (accepts `--source-prefix` / `--source-suffix` / `--output-prefix` / `--output-postfix` so it can target v5 charuko sources)
+- `scripts/run_eval3_synth_pins_dataset_gen.sh` — legacy env-var wrapper around the same generator with v3 charuco defaults; **not** wired into v17, kept for backward compatibility with the older `pins10eval_*` Hub family
 - `tools/pins_quality_filter.py` — Haar-based scorer that produces the quality-ranked, B&W-penalised pool JSON (§3.6)
-- `datasets/pins-face-recognition-top30-quality.json` — the ranked pool the pins30 slate samples from (regenerate via `pins_quality_filter.py`)
 - `datasets/algvr-conference.json` — 34-person celeb pool the algvr slate samples from
+- `datasets/pins-face-recognition-top30-quality.json` — 30-person celeb pool (quality-filtered, best-first sorted) the pins30q5 slate samples from
 - `tools/eval3_val_watcher.py` — held-out validation watcher (§4.1). Polls the train output for new checkpoints + scores each on user-configurable LeRobot-format datasets. Three modes: continuous watch, `--once`, direct `--policy-path`.
 - `tools/eval3_val_watcher_unit_tests.py` — 57-check unit suite (W1-W14) for the val watcher: regex coverage, rename-map detection, frame sampling, summary aggregation, lazy JSONL header, env+CLI precedence.
 
@@ -896,12 +892,6 @@ python tools/eval3_val_watcher.py \
 - **Optional `v17` battery arm**: if v17 deploys regularly, add a dedicated
   case in `scripts/run_eval3_deploy_battery.sh` so the user doesn't have to
   use the `v16` arm.
-- **`EVAL3_V17_INCLUDE_PINS30=1` launcher toggle** — wire the 90-dataset
-  pins30 slate from §3.6 into the v17 launcher the same way `INCLUDE_ALGVR`
-  is wired: glob-discover `datasets/dataset_v5_synth_*_full_pins30`, append
-  to `EVAL3_LOCAL_REPOS`, warn-and-continue if the slate is empty. Until
-  this lands, use the manual `EVAL3_LOCAL_REPOS=…` recipe at the end of
-  §3.6.
 - **Stronger face detector for the pins quality filter.** Haar's recall on
   partial / profile / occluded faces leaks bad photos through the
   single-face gate (§3.6 known limits). Drop-in upgrade: MediaPipe Face

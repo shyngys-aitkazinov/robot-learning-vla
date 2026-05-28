@@ -436,7 +436,7 @@ def concat_mp4s(clip_paths: list[Path], out_mp4: Path) -> None:
             "ffmpeg", "-y", "-loglevel", "error",
             "-f", "concat", "-safe", "0", "-i", str(list_path),
             "-fflags", "+genpts",
-            "-fps_mode", "cfr", "-r", str(FPS),
+            "-vsync", "cfr", "-r", str(FPS),
             "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p",
             "-preset", "fast", "-crf", "18",
             str(out_mp4),

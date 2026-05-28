@@ -54,16 +54,21 @@
 #   EVAL3_CAM1_DROP_NOISE_MEAN=0.5  EVAL3_CAM1_DROP_NOISE_STD=0.25
 #   EVAL3_CAM1_DROP_EPOCH_WINDOW=5000  steps per per-episode reroll
 #
-# Corpus toggles (one mode at a time; INCLUDE_V2 / INCLUDE_ALGVR are additive):
-#   default                  -> 9 real v4 + 9 synth v3_3   (full v17 corpus)
-#   EVAL3_V17_NO_SYNTH=1     -> 9 real v4 only
-#   EVAL3_V17_SYNTH_ONLY=1   -> 9 synth v3_3 only
-#   EVAL3_V17_INCLUDE_V2=1   -> ALSO append the 9 legacy dataset_v2_* repos
-#   EVAL3_V17_INCLUDE_ALGVR=1-> ALSO append all local dataset_v5_synth_algvr_*_full
-#                                (built by scripts/run_eval3_synth_algvr_dataset_gen.sh
-#                                from algvr-conference.json + v5 charuko sources;
-#                                up to 102 datasets / ~594 eps / ~296k frames at
-#                                the default M=3 generator knob)
+# Corpus toggles (one mode at a time; INCLUDE_V2 / INCLUDE_ALGVR / INCLUDE_PINS30Q5 are additive):
+#   default                    -> 9 real v4 + 9 synth v3_3   (full v17 corpus)
+#   EVAL3_V17_NO_SYNTH=1       -> 9 real v4 only
+#   EVAL3_V17_SYNTH_ONLY=1     -> 9 synth v3_3 only
+#   EVAL3_V17_INCLUDE_V2=1     -> ALSO append the 9 legacy dataset_v2_* repos
+#   EVAL3_V17_INCLUDE_ALGVR=1  -> ALSO append all local dataset_v5_synth_algvr_*_full
+#                                  (built by scripts/run_eval3_synth_algvr_dataset_gen.sh
+#                                  from algvr-conference.json + v5 charuko sources;
+#                                  up to 102 datasets / ~594 eps / ~296k frames at
+#                                  the default M=3 generator knob)
+#   EVAL3_V17_INCLUDE_PINS30Q5=1 -> ALSO append all local dataset_v5_synth_pins30q5_*_full
+#                                  (built by scripts/run_eval3_synth_pins30q5_dataset_gen.sh
+#                                  from pins-face-recognition-top30-quality.json + v5
+#                                  charuko sources; up to 90 datasets / ~1350 eps /
+#                                  ~640k frames at the default N=5 / M=3 knobs)
 #   EVAL3_WANDB=1  EVAL3_WANDB_PROJECT=eval3-v17-camdrop
 #   EVAL3_DRY_RUN=0
 #
@@ -151,6 +156,28 @@ if [[ "${EVAL3_V17_INCLUDE_ALGVR:-0}" == "1" ]]; then
   fi
 fi
 
+# Slate 5 — PINS top-30 quality-filtered synthetic (up to 90 datasets, ~1350
+# episodes / ~640k frames at the default N=5 / M=3 generation knobs).
+# OPT-IN, additive. LOCAL ONLY — discovered by glob, parallels slate 4.
+#
+# Provenance: built by ./scripts/run_eval3_synth_pins30q5_dataset_gen.sh from
+#   - sources: datasets/dataset_v5_charuko_{left,middle,right}_full
+#   - pool   : datasets/pins-face-recognition-top30-quality.json (30 celebs,
+#              quality_photos field sorted best-first)
+# Output names follow dataset_v5_synth_pins30q5_<celeb_slug>_<position>_full.
+PINS30Q5_NAMES=""
+PINS30Q5_EXTRAS=""
+if [[ "${EVAL3_V17_INCLUDE_PINS30Q5:-0}" == "1" ]]; then
+  PINS30Q5_NAMES=$(/bin/ls -1d "$ROOT"/datasets/dataset_v5_synth_pins30q5_*_full 2>/dev/null \
+                     | xargs -n1 basename 2>/dev/null | sort || true)
+  if [[ -z "$PINS30Q5_NAMES" ]]; then
+    echo "WARN EVAL3_V17_INCLUDE_PINS30Q5=1 but no datasets/dataset_v5_synth_pins30q5_*_full found." >&2
+    echo "     Build them first: ./scripts/run_eval3_synth_pins30q5_dataset_gen.sh" >&2
+  else
+    PINS30Q5_EXTRAS=$(echo "$PINS30Q5_NAMES" | sed 's|^|RobotLearningVLA/|' | paste -sd, -)
+  fi
+fi
+
 # ---- Corpus selection ------------------------------------------------------
 
 if [[ "${EVAL3_V17_SYNTH_ONLY:-0}" == "1" ]]; then
@@ -176,6 +203,12 @@ fi
 if [[ "${EVAL3_V17_INCLUDE_ALGVR:-0}" == "1" && -n "$ALGVR_EXTRAS" ]]; then
   EXTRA_REPOS="${EXTRA_REPOS},${ALGVR_EXTRAS}"
   LOCAL_REPOS="${LOCAL_REPOS:+$LOCAL_REPOS,}${ALGVR_EXTRAS}"
+fi
+
+# Pins30q5 slate — same additive + local-only wiring as the algvr slate.
+if [[ "${EVAL3_V17_INCLUDE_PINS30Q5:-0}" == "1" && -n "$PINS30Q5_EXTRAS" ]]; then
+  EXTRA_REPOS="${EXTRA_REPOS},${PINS30Q5_EXTRAS}"
+  LOCAL_REPOS="${LOCAL_REPOS:+$LOCAL_REPOS,}${PINS30Q5_EXTRAS}"
 fi
 
 # ---- Run config ------------------------------------------------------------
@@ -275,6 +308,10 @@ fi
 if [[ "${EVAL3_V17_INCLUDE_ALGVR:-0}" == "1" ]]; then
   algvr_n=$(echo "$ALGVR_NAMES" | grep -c . || true)
   echo "     algvr add-on     : +${algvr_n} dataset_v5_synth_algvr_*_full (local, from algvr-conference.json)"
+fi
+if [[ "${EVAL3_V17_INCLUDE_PINS30Q5:-0}" == "1" ]]; then
+  pins30q5_n=$(echo "$PINS30Q5_NAMES" | grep -c . || true)
+  echo "     pins30q5 add-on  : +${pins30q5_n} dataset_v5_synth_pins30q5_*_full (local, from pins top-30 quality)"
 fi
 echo "   dataset (primary)     : $REPO"
 echo "   virtual extras        : $EVAL3_EXTRA_REPOS"
