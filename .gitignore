@@ -42,6 +42,9 @@ datasets/*
 !datasets/out-distribution-eval-3-pins.json
 !datasets/out-distribution-eval-3-pins/
 !datasets/out-distribution-eval-3-pins/**
+!datasets/algvr-conference.json
+!datasets/algvr-conference/
+!datasets/algvr-conference/**
 
 # OS
 .DS_Store

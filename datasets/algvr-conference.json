@@ -1,0 +1,1148 @@
+{
+  "dataset": "algvr.com Conference — Organizers + Invited Speakers",
+  "source": "Conference portraits from algvr.com plus Wikimedia Commons / personal / institution pages linked from the conference site",
+  "source_url": "https://algvr.com/conference/",
+  "source_json": null,
+  "root": "datasets/algvr-conference",
+  "generated_at": "2026-05-28T15:42:07+00:00",
+  "total_celebrities": 34,
+  "total_images": 67,
+  "total_bytes": 46988405,
+  "category_counts": {
+    "organizer": 6,
+    "speaker": 28
+  },
+  "selection_rationale": "Every organizer and invited speaker on https://algvr.com/conference/. Photo #1 is always the conference-site portrait; additional photos are Wikimedia Commons portraits or institution-page photos (license + author recorded per image). Hotel hospitality staff (Sebastiano, Maria Petrillo) are intentionally excluded because the page provides no photo.",
+  "held_out_identities_target": [
+    "Barack Obama",
+    "Taylor Swift",
+    "Yann LeCun"
+  ],
+  "held_out_identities_present": [
+    "Yann LeCun"
+  ],
+  "name_overrides_applied": {
+    "aude billiard": "Aude Billard"
+  },
+  "celebrities": [
+    {
+      "name": "Marc Pollefeys",
+      "slug": "marc_pollefeys",
+      "dir": "datasets/algvr-conference/marc_pollefeys",
+      "n_images": 2,
+      "total_bytes": 2372325,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 2,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 400,
+        "median": 1381,
+        "max": 2362
+      },
+      "rank": null,
+      "category": "organizer",
+      "affiliation": "ETH Zurich",
+      "external_url": "https://inf.ethz.ch/people/person-detail.pollefeys.html"
+    },
+    {
+      "name": "Jeannette Bohg",
+      "slug": "jeannette_bohg",
+      "dir": "datasets/algvr-conference/jeannette_bohg",
+      "n_images": 2,
+      "total_bytes": 439442,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 1,
+        "landscape": 0,
+        "square": 1
+      },
+      "aspect_portrait_frac": 0.5,
+      "long_edge_px": {
+        "min": 400,
+        "median": 498,
+        "max": 596
+      },
+      "rank": null,
+      "category": "organizer",
+      "affiliation": "Stanford University",
+      "external_url": "https://web.stanford.edu/~bohg/"
+    },
+    {
+      "name": "Xi Wang",
+      "slug": "xi_wang",
+      "dir": "datasets/algvr-conference/xi_wang",
+      "n_images": 2,
+      "total_bytes": 350705,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 2,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 598,
+        "median": 607,
+        "max": 616
+      },
+      "rank": null,
+      "category": "organizer",
+      "affiliation": null,
+      "external_url": "https://xiwang1212.github.io/homepage/"
+    },
+    {
+      "name": "Alexey Gavryushin",
+      "slug": "alexey_gavryushin",
+      "dir": "datasets/algvr-conference/alexey_gavryushin",
+      "n_images": 1,
+      "total_bytes": 108798,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 1,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 590,
+        "median": 590,
+        "max": 590
+      },
+      "rank": null,
+      "category": "organizer",
+      "affiliation": null,
+      "external_url": "https://algvr.com/"
+    },
+    {
+      "name": "Roy Yang",
+      "slug": "roy_yang",
+      "dir": "datasets/algvr-conference/roy_yang",
+      "n_images": 2,
+      "total_bytes": 2037163,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 1,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.5,
+      "long_edge_px": {
+        "min": 400,
+        "median": 2291,
+        "max": 4182
+      },
+      "rank": null,
+      "category": "organizer",
+      "affiliation": null,
+      "external_url": "https://royyang0714.github.io"
+    },
+    {
+      "name": "Ayse Johannes",
+      "slug": "ayse_johannes",
+      "dir": "datasets/algvr-conference/ayse_johannes",
+      "n_images": 1,
+      "total_bytes": 191347,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 1,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 400,
+        "median": 400,
+        "max": 400
+      },
+      "rank": null,
+      "category": "organizer",
+      "affiliation": "ETH Zurich",
+      "external_url": "https://inf.ethz.ch/de/personen/person-detail.MjUxNTI1.TGlzdC8zMDQsLTg3NDc3NjI0MQ==.html"
+    },
+    {
+      "name": "Andrea Vedaldi",
+      "slug": "andrea_vedaldi",
+      "dir": "datasets/algvr-conference/andrea_vedaldi",
+      "n_images": 2,
+      "total_bytes": 1421353,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 1,
+        "landscape": 0,
+        "square": 1
+      },
+      "aspect_portrait_frac": 0.5,
+      "long_edge_px": {
+        "min": 1819,
+        "median": 1819,
+        "max": 1819
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": "University of Oxford",
+      "external_url": "https://www.robots.ox.ac.uk/~vedaldi/"
+    },
+    {
+      "name": "Andy Zeng",
+      "slug": "andy_zeng",
+      "dir": "datasets/algvr-conference/andy_zeng",
+      "n_images": 2,
+      "total_bytes": 283369,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 1,
+        "landscape": 0,
+        "square": 1
+      },
+      "aspect_portrait_frac": 0.5,
+      "long_edge_px": {
+        "min": 400,
+        "median": 600,
+        "max": 800
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": null,
+      "external_url": "https://andyzeng.github.io/"
+    },
+    {
+      "name": "Aude Billard",
+      "slug": "aude_billard",
+      "dir": "datasets/algvr-conference/aude_billard",
+      "n_images": 2,
+      "total_bytes": 7650952,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 2,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 400,
+        "median": 3008,
+        "max": 5616
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": "EPFL",
+      "external_url": "https://people.epfl.ch/aude.billard"
+    },
+    {
+      "name": "Cordelia Schmid",
+      "slug": "cordelia_schmid",
+      "dir": "datasets/algvr-conference/cordelia_schmid",
+      "n_images": 2,
+      "total_bytes": 364790,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 2,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 533,
+        "median": 606,
+        "max": 679
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": "INRIA",
+      "external_url": "https://thoth.inrialpes.fr/~schmid/"
+    },
+    {
+      "name": "Danfei Xu",
+      "slug": "danfei_xu",
+      "dir": "datasets/algvr-conference/danfei_xu",
+      "n_images": 2,
+      "total_bytes": 1977032,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 2,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 1836,
+        "median": 2099,
+        "max": 2363
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": "Georgia Tech",
+      "external_url": "https://faculty.cc.gatech.edu/~danfei/"
+    },
+    {
+      "name": "Dima Damen",
+      "slug": "dima_damen",
+      "dir": "datasets/algvr-conference/dima_damen",
+      "n_images": 2,
+      "total_bytes": 245365,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 2,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 400,
+        "median": 722,
+        "max": 1044
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": null,
+      "external_url": "https://dimadamen.github.io/"
+    },
+    {
+      "name": "Edward Johns",
+      "slug": "edward_johns",
+      "dir": "datasets/algvr-conference/edward_johns",
+      "n_images": 2,
+      "total_bytes": 103421,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 2,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 400,
+        "median": 467,
+        "max": 534
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": null,
+      "external_url": "http://www.robot-learning.uk/"
+    },
+    {
+      "name": "Georgia Chalvatzaki",
+      "slug": "georgia_chalvatzaki",
+      "dir": "datasets/algvr-conference/georgia_chalvatzaki",
+      "n_images": 2,
+      "total_bytes": 3378666,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 2,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 400,
+        "median": 2651,
+        "max": 4903
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": "TU Darmstadt",
+      "external_url": "https://www.ias.informatik.tu-darmstadt.de/Team/GeorgiaChalvatzaki"
+    },
+    {
+      "name": "Jakob Engel",
+      "slug": "jakob_engel",
+      "dir": "datasets/algvr-conference/jakob_engel",
+      "n_images": 2,
+      "total_bytes": 149574,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 2,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 225,
+        "median": 312,
+        "max": 400
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": null,
+      "external_url": "https://jakobengel.github.io/"
+    },
+    {
+      "name": "Javier Romero",
+      "slug": "javier_romero",
+      "dir": "datasets/algvr-conference/javier_romero",
+      "n_images": 2,
+      "total_bytes": 30130,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 1,
+        "landscape": 0,
+        "square": 1
+      },
+      "aspect_portrait_frac": 0.5,
+      "long_edge_px": {
+        "min": 128,
+        "median": 264,
+        "max": 400
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": null,
+      "external_url": "https://linkedin.com/in/javier-romero-38b87331"
+    },
+    {
+      "name": "Jiajun Wu",
+      "slug": "jiajun_wu",
+      "dir": "datasets/algvr-conference/jiajun_wu",
+      "n_images": 2,
+      "total_bytes": 153764,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 1,
+        "landscape": 0,
+        "square": 1
+      },
+      "aspect_portrait_frac": 0.5,
+      "long_edge_px": {
+        "min": 400,
+        "median": 400,
+        "max": 400
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": null,
+      "external_url": "https://jiajunwu.com/"
+    },
+    {
+      "name": "Jitendra Malik",
+      "slug": "jitendra_malik",
+      "dir": "datasets/algvr-conference/jitendra_malik",
+      "n_images": 2,
+      "total_bytes": 1397050,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 1,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.5,
+      "long_edge_px": {
+        "min": 400,
+        "median": 2048,
+        "max": 3696
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": "UC Berkeley",
+      "external_url": "https://people.eecs.berkeley.edu/~malik/"
+    },
+    {
+      "name": "Jonathan Tremblay",
+      "slug": "jonathan_tremblay",
+      "dir": "datasets/algvr-conference/jonathan_tremblay",
+      "n_images": 2,
+      "total_bytes": 147230,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 1,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.5,
+      "long_edge_px": {
+        "min": 200,
+        "median": 300,
+        "max": 400
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": "NVIDIA",
+      "external_url": "https://research.nvidia.com/person/jonathan-tremblay"
+    },
+    {
+      "name": "Josef Sivic",
+      "slug": "josef_sivic",
+      "dir": "datasets/algvr-conference/josef_sivic",
+      "n_images": 2,
+      "total_bytes": 397695,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 2,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 400,
+        "median": 1199,
+        "max": 1999
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": "ENS Paris",
+      "external_url": "https://www.di.ens.fr/~josef/"
+    },
+    {
+      "name": "Judy Fan",
+      "slug": "judy_fan",
+      "dir": "datasets/algvr-conference/judy_fan",
+      "n_images": 2,
+      "total_bytes": 1595579,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 1,
+        "landscape": 0,
+        "square": 1
+      },
+      "aspect_portrait_frac": 0.5,
+      "long_edge_px": {
+        "min": 400,
+        "median": 1015,
+        "max": 1631
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": "Stanford University",
+      "external_url": "https://psychology.stanford.edu/people/judith-ellen-fan"
+    },
+    {
+      "name": "Leslie Kaelbling",
+      "slug": "leslie_kaelbling",
+      "dir": "datasets/algvr-conference/leslie_kaelbling",
+      "n_images": 2,
+      "total_bytes": 150033,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 2,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 400,
+        "median": 467,
+        "max": 535
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": "MIT CSAIL",
+      "external_url": "https://www.csail.mit.edu/person/leslie-kaelbling"
+    },
+    {
+      "name": "Li Yi",
+      "slug": "li_yi",
+      "dir": "datasets/algvr-conference/li_yi",
+      "n_images": 2,
+      "total_bytes": 319781,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 1,
+        "landscape": 0,
+        "square": 1
+      },
+      "aspect_portrait_frac": 0.5,
+      "long_edge_px": {
+        "min": 256,
+        "median": 528,
+        "max": 800
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": "Tsinghua University",
+      "external_url": "https://iiis.tsinghua.edu.cn/en/People/Faculty/YiLi.htm"
+    },
+    {
+      "name": "Oier Mees",
+      "slug": "oier_mees",
+      "dir": "datasets/algvr-conference/oier_mees",
+      "n_images": 2,
+      "total_bytes": 64122,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 1,
+        "landscape": 0,
+        "square": 1
+      },
+      "aspect_portrait_frac": 0.5,
+      "long_edge_px": {
+        "min": 270,
+        "median": 335,
+        "max": 400
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": null,
+      "external_url": "https://www.oiermees.com/"
+    },
+    {
+      "name": "Phillip Isola",
+      "slug": "phillip_isola",
+      "dir": "datasets/algvr-conference/phillip_isola",
+      "n_images": 2,
+      "total_bytes": 712555,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 2,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 1142,
+        "median": 1142,
+        "max": 1142
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": "MIT",
+      "external_url": "https://web.mit.edu/phillipi/"
+    },
+    {
+      "name": "Pulkit Agrawal",
+      "slug": "pulkit_agrawal",
+      "dir": "datasets/algvr-conference/pulkit_agrawal",
+      "n_images": 2,
+      "total_bytes": 3759074,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 1,
+        "landscape": 0,
+        "square": 1
+      },
+      "aspect_portrait_frac": 0.5,
+      "long_edge_px": {
+        "min": 1520,
+        "median": 1784,
+        "max": 2048
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": "MIT CSAIL",
+      "external_url": "https://people.csail.mit.edu/pulkitag/"
+    },
+    {
+      "name": "Robert Katzschmann",
+      "slug": "robert_katzschmann",
+      "dir": "datasets/algvr-conference/robert_katzschmann",
+      "n_images": 2,
+      "total_bytes": 510897,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 1,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.5,
+      "long_edge_px": {
+        "min": 400,
+        "median": 1280,
+        "max": 2160
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": "ETH Zurich",
+      "external_url": "https://mavt.ethz.ch/de/personen/person-detail.katzschmann.html"
+    },
+    {
+      "name": "Shuran Song",
+      "slug": "shuran_song",
+      "dir": "datasets/algvr-conference/shuran_song",
+      "n_images": 2,
+      "total_bytes": 267013,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 2,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 400,
+        "median": 617,
+        "max": 834
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": null,
+      "external_url": "https://shurans.github.io/"
+    },
+    {
+      "name": "Siyu Tang",
+      "slug": "siyu_tang",
+      "dir": "datasets/algvr-conference/siyu_tang",
+      "n_images": 2,
+      "total_bytes": 160111,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 1,
+        "landscape": 0,
+        "square": 1
+      },
+      "aspect_portrait_frac": 0.5,
+      "long_edge_px": {
+        "min": 400,
+        "median": 600,
+        "max": 800
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": "ETH Zurich",
+      "external_url": "https://vlg.inf.ethz.ch/team/Prof-Dr-Siyu-Tang.html"
+    },
+    {
+      "name": "Vladlen Koltun",
+      "slug": "vladlen_koltun",
+      "dir": "datasets/algvr-conference/vladlen_koltun",
+      "n_images": 2,
+      "total_bytes": 910542,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 2,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 900,
+        "median": 900,
+        "max": 900
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": null,
+      "external_url": "https://vladlen.info/"
+    },
+    {
+      "name": "Wenzhen Yuan",
+      "slug": "wenzhen_yuan",
+      "dir": "datasets/algvr-conference/wenzhen_yuan",
+      "n_images": 2,
+      "total_bytes": 82977,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 2,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 375,
+        "median": 375,
+        "max": 375
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": "University of Illinois",
+      "external_url": "https://siebelschool.illinois.edu/about/people/faculty/yuanwz"
+    },
+    {
+      "name": "Yann LeCun",
+      "slug": "yann_lecun",
+      "dir": "datasets/algvr-conference/yann_lecun",
+      "n_images": 4,
+      "total_bytes": 14156465,
+      "held_out": true,
+      "aspect_counts": {
+        "portrait": 3,
+        "landscape": 1,
+        "square": 0
+      },
+      "aspect_portrait_frac": 0.75,
+      "long_edge_px": {
+        "min": 400,
+        "median": 2062,
+        "max": 5627
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": null,
+      "external_url": "http://yann.lecun.com/"
+    },
+    {
+      "name": "Yuke Zhu",
+      "slug": "yuke_zhu",
+      "dir": "datasets/algvr-conference/yuke_zhu",
+      "n_images": 2,
+      "total_bytes": 529821,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 2,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 891,
+        "median": 1045,
+        "max": 1200
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": null,
+      "external_url": "https://yukezhu.me/"
+    },
+    {
+      "name": "Yoichi Sato",
+      "slug": "yoichi_sato",
+      "dir": "datasets/algvr-conference/yoichi_sato",
+      "n_images": 1,
+      "total_bytes": 569264,
+      "held_out": false,
+      "aspect_counts": {
+        "portrait": 1,
+        "landscape": 0,
+        "square": 0
+      },
+      "aspect_portrait_frac": 1.0,
+      "long_edge_px": {
+        "min": 1441,
+        "median": 1441,
+        "max": 1441
+      },
+      "rank": null,
+      "category": "speaker",
+      "affiliation": null,
+      "external_url": "https://sites.google.com/ut-vision.org/ysato/"
+    }
+  ],
+  "image_sources": {
+    "marc_pollefeys/marc_pollefeys_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/09/Marc_Pollefeys.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "marc_pollefeys/marc_pollefeys_02.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/Special:FilePath/ETH-BIB-Pollefeys,_Marc_(1971-)-Portr_19969.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "ETH-Bibliothek Zürich, Bildarchiv (via Wikimedia Commons)"
+    },
+    "jeannette_bohg/jeannette_bohg_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/09/Jeannette_Bohg.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "jeannette_bohg/jeannette_bohg_02.png": {
+      "source_url": "https://web.stanford.edu/~bohg/img/portrait_square.png",
+      "license": "personal/lab page portrait",
+      "author": "Jeannette Bohg (Stanford personal page)"
+    },
+    "xi_wang/xi_wang_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/08/Xi_Wang.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "xi_wang/xi_wang_02.jpg": {
+      "source_url": "https://xiwang1212.github.io/homepage/imgs/xi.jpg",
+      "license": "personal/lab page portrait",
+      "author": "Xi Wang (personal site)"
+    },
+    "alexey_gavryushin/alexey_gavryushin_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/08/Alexey_Gavryushin_Portrait.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "roy_yang/roy_yang_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2026/04/Roy_Yang.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "roy_yang/roy_yang_02.jpg": {
+      "source_url": "https://royyang0714.github.io/images/roy.jpg",
+      "license": "personal/lab page portrait",
+      "author": "Roy Yang (personal site)"
+    },
+    "ayse_johannes/ayse_johannes_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2026/04/Ayse_Johannes.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "andrea_vedaldi/andrea_vedaldi_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/10/Andrea_Vedaldi.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "andrea_vedaldi/andrea_vedaldi_02.jpg": {
+      "source_url": "https://www.robots.ox.ac.uk/~vedaldi/images/vedaldi.jpg",
+      "license": "personal/lab page portrait",
+      "author": "Andrea Vedaldi (Oxford VGG)"
+    },
+    "andy_zeng/andy_zeng_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2026/05/Andy_Zeng.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "andy_zeng/andy_zeng_02.jpg": {
+      "source_url": "https://andyzeng.github.io/images/profile.jpg",
+      "license": "personal/lab page portrait",
+      "author": "Andy Zeng (personal site)"
+    },
+    "aude_billard/aude_billard_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/10/Aude_Billiard.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "aude_billard/aude_billard_02.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/Special:FilePath/200903 EPFL Aude Billard Portrait.jpg",
+      "license": "CC BY-SA",
+      "author": "EPFL Mediacom (via Wikimedia Commons)"
+    },
+    "cordelia_schmid/cordelia_schmid_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/12/Cordelia_Schmid.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "cordelia_schmid/cordelia_schmid_02.jpg": {
+      "source_url": "https://thoth.inrialpes.fr/~schmid/images/photoCordelia.gif",
+      "license": "personal/lab page portrait",
+      "author": "Cordelia Schmid (INRIA Thoth team page)"
+    },
+    "danfei_xu/danfei_xu_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/12/Danfei_Xu.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "danfei_xu/danfei_xu_02.jpg": {
+      "source_url": "https://faculty.cc.gatech.edu/~danfei/profile_2026.jpg",
+      "license": "institution page portrait",
+      "author": "Danfei Xu (Georgia Tech faculty page)"
+    },
+    "dima_damen/dima_damen_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/08/Dima_Damen_equisize.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "dima_damen/dima_damen_02.jpg": {
+      "source_url": "https://dimadamen.github.io/Dima2019_s.jpg",
+      "license": "personal/lab page portrait",
+      "author": "Dima Damen (personal site)"
+    },
+    "edward_johns/edward_johns_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2026/05/Edward_Johns.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "edward_johns/edward_johns_02.jpg": {
+      "source_url": "https://static.wixstatic.com/media/20f657_c4a0892ff46d421386482fc25da69df7~mv2_d_1659_2212_s_2.jpg/v1/fill/w_400,h_534,al_c,q_80,enc_avif,quality_auto/edward_johns_2019.jpg",
+      "license": "personal/lab page portrait",
+      "author": "Edward Johns (Imperial Robot Learning Lab site)"
+    },
+    "georgia_chalvatzaki/georgia_chalvatzaki_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/10/Georgia_Chalvatzaki.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "georgia_chalvatzaki/georgia_chalvatzaki_02.jpg": {
+      "source_url": "https://www.ias.informatik.tu-darmstadt.de/uploads/Team/GeorgiaChalvatzaki/profile_geo.jpg",
+      "license": "institution page portrait",
+      "author": "TU Darmstadt IAS lab page"
+    },
+    "jakob_engel/jakob_engel_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2026/05/Jakob_Engel.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "jakob_engel/jakob_engel_02.jpg": {
+      "source_url": "https://jakobengel.github.io/images/JakobEngel.JPG",
+      "license": "personal/lab page portrait",
+      "author": "Jakob Engel (personal site)"
+    },
+    "javier_romero/javier_romero_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2026/05/Javier_Romero.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "javier_romero/javier_romero_02.jpg": {
+      "source_url": "https://scholar.googleusercontent.com/citations?view_op=view_photo&user=Wx62iOsAAAAJ&citpid=4",
+      "license": "Google Scholar profile photo",
+      "author": "Javier Romero (Google Scholar)"
+    },
+    "jiajun_wu/jiajun_wu_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/10/Jiajun_Wu.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "jiajun_wu/jiajun_wu_02.jpg": {
+      "source_url": "https://jiajunwu.com/images/Jiajun_Wu.jpg",
+      "license": "personal/lab page portrait",
+      "author": "Jiajun Wu (personal site)"
+    },
+    "jitendra_malik/jitendra_malik_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/10/Jitendra_Malik.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "jitendra_malik/jitendra_malik_02.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/Special:FilePath/180906-N-PO203-0045 (43874899564).jpg",
+      "license": "Public domain (US Navy)",
+      "author": "U.S. Navy photo (via Wikimedia Commons)"
+    },
+    "jonathan_tremblay/jonathan_tremblay_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2026/04/Jonathan_Tremblay.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "jonathan_tremblay/jonathan_tremblay_02.jpg": {
+      "source_url": "https://www.cs.mcgill.ca/~jtremb59/img/profile.jpg",
+      "license": "personal/lab page portrait",
+      "author": "Jonathan Tremblay (McGill personal page)"
+    },
+    "josef_sivic/josef_sivic_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/10/Josef_Sivic.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "josef_sivic/josef_sivic_02.jpg": {
+      "source_url": "https://www.di.ens.fr/~josef/images/image2.jpg",
+      "license": "institution page portrait",
+      "author": "Josef Sivic (ENS DI page)"
+    },
+    "judy_fan/judy_fan_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/12/Judith_Fan.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "judy_fan/judy_fan_02.jpg": {
+      "source_url": "https://cogtoolslab.github.io/images/people/FanJE_photo.jpg",
+      "license": "personal/lab page portrait",
+      "author": "Judy Fan (Cognitive Tools Lab page)"
+    },
+    "leslie_kaelbling/leslie_kaelbling_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/08/Leslie_Kaelbling_equisize.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "leslie_kaelbling/leslie_kaelbling_02.jpg": {
+      "source_url": "https://people.csail.mit.edu/lpk/lpkLadder.jpg",
+      "license": "personal/lab page portrait",
+      "author": "Leslie Kaelbling (MIT CSAIL personal page)"
+    },
+    "li_yi/li_yi_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/12/Eric_Yi.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "li_yi/li_yi_02.jpg": {
+      "source_url": "https://iiis.tsinghua.edu.cn/zpyx/yeli.jpg",
+      "license": "institution page portrait",
+      "author": "Tsinghua IIIS faculty page"
+    },
+    "oier_mees/oier_mees_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/10/Oier_Mees.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "oier_mees/oier_mees_02.jpg": {
+      "source_url": "https://www.oiermees.com/authors/admin/avatar_huf77bb6f3481ea674f51f312221d30a5e_499601_270x270_fill_q75_lanczos_center.jpg",
+      "license": "personal/lab page portrait",
+      "author": "Oier Mees (personal site)"
+    },
+    "phillip_isola/phillip_isola_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/10/Phillip_Isola.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "phillip_isola/phillip_isola_02.jpg": {
+      "source_url": "https://web.mit.edu/phillipi/www/images/photo_of_me_korea.jpeg",
+      "license": "personal/lab page portrait",
+      "author": "Phillip Isola (MIT personal page)"
+    },
+    "pulkit_agrawal/pulkit_agrawal_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/10/Pulkit_Agrawal.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "pulkit_agrawal/pulkit_agrawal_02.jpg": {
+      "source_url": "https://people.csail.mit.edu/pulkitag/images/pulkit.jpg",
+      "license": "institution page portrait",
+      "author": "Pulkit Agrawal (MIT CSAIL page)"
+    },
+    "robert_katzschmann/robert_katzschmann_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2026/04/Robert_Katzschmann.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "robert_katzschmann/robert_katzschmann_02.jpg": {
+      "source_url": "https://srl.ethz.ch/the-group/_jcr_content/par/fullwidthimage/image.imageformat.1286.1024892551.jpg",
+      "license": "institution page portrait",
+      "author": "ETH Zurich Soft Robotics Lab page"
+    },
+    "shuran_song/shuran_song_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/08/Shuran_Song_equisize.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "shuran_song/shuran_song_02.jpg": {
+      "source_url": "https://shurans.github.io/images/people/shuran_song.jpg",
+      "license": "personal/lab page portrait",
+      "author": "Shuran Song (personal site)"
+    },
+    "siyu_tang/siyu_tang_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2026/05/Siyu_Tang.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "siyu_tang/siyu_tang_02.jpg": {
+      "source_url": "https://vlg.inf.ethz.ch/assets/img/members/Siyu-Tang.jpg",
+      "license": "institution page portrait",
+      "author": "ETH Zurich VLG team page"
+    },
+    "vladlen_koltun/vladlen_koltun_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/10/Vladlen_Koltun.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "vladlen_koltun/vladlen_koltun_02.jpg": {
+      "source_url": "http://vladlen.info/images/vladlen.jpg",
+      "license": "personal/lab page portrait",
+      "author": "Vladlen Koltun (personal site)"
+    },
+    "wenzhen_yuan/wenzhen_yuan_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/12/Wenzhen_Yuan.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "wenzhen_yuan/wenzhen_yuan_02.jpg": {
+      "source_url": "https://ws.engr.illinois.edu/directory/viewphoto.aspx?photo=19131&s=300",
+      "license": "institution page portrait",
+      "author": "UIUC Siebel School faculty directory"
+    },
+    "yann_lecun/yann_lecun_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2026/05/Yann_LeCun_22.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "yann_lecun/yann_lecun_02.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Laura Chaubard & Yann Le Cun - 2024 (53814052697) (cropped).jpg",
+      "license": "CC BY-SA 2.0",
+      "author": "Jeremy Barande / Ecole polytechnique (via Wikimedia Commons)"
+    },
+    "yann_lecun/yann_lecun_03.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Yann LeCun - 2018 (cropped).jpg",
+      "license": "CC BY-SA 2.0",
+      "author": "Jeremy Barande / Ecole polytechnique (via Wikimedia Commons)"
+    },
+    "yann_lecun/yann_lecun_04.jpg": {
+      "source_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Yann LeCun (29146901108).jpg",
+      "license": "CC BY-SA 2.0",
+      "author": "Jeremy Barande / Ecole polytechnique (via Wikimedia Commons)"
+    },
+    "yuke_zhu/yuke_zhu_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/12/Yuke_Zhu.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    },
+    "yuke_zhu/yuke_zhu_02.jpg": {
+      "source_url": "https://www.cs.utexas.edu/~yukez/images/yukezhu.jpg",
+      "license": "institution page portrait",
+      "author": "Yuke Zhu (UT Austin faculty page)"
+    },
+    "yoichi_sato/yoichi_sato_01.jpg": {
+      "source_url": "https://algvr.com/conference/wp-content/uploads/2025/10/Yoichi_Sato.jpg",
+      "license": "website portrait (algvr.com)",
+      "author": "algvr.com (Vision & Robotics for Embodied AI Conference)"
+    }
+  }
+}
