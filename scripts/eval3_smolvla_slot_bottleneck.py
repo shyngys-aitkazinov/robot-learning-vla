@@ -99,6 +99,12 @@ def apply() -> None:
     # count the slot CE loss only on pre-grasp frames.
     frame0_mode = _env_bool("EVAL3_SLOT_FRAME0", False)
     ce_pregrasp_only = _env_bool("EVAL3_SLOT_CE_PREGRASP_ONLY", False)
+    # Lever A: append the SAME h_slot prefix token K times instead of once.
+    # Boosts h_slot's positional share of the action expert's cross-attention
+    # from ~1/(n_prefix) to ~K/(n_prefix). slot_proj remains a single adapter,
+    # so the *content* is identical -- only the attention budget changes.
+    # K=1 reproduces v16 behavior bit-exactly. K=4-8 is the recommended range.
+    token_repeat = max(1, _env_int("EVAL3_SLOT_TOKEN_REPEAT", 1))
 
     # ---- the slot classifier module -------------------------------------
     class SlotClassifier(nn.Module):
@@ -199,9 +205,9 @@ def apply() -> None:
         logging.info(
             "[eval3_slot_bottleneck] installed SlotClassifier "
             "(d_model=%d, hidden=%d, bottleneck=%d, dropout=%.2f, stopgrad=%s, gumbel=%s, "
-            "weight=%.3f, frame0=%s, ce_pregrasp_only=%s)",
+            "weight=%.3f, frame0=%s, ce_pregrasp_only=%s, token_repeat=K=%d)",
             d_model, hidden, bottleneck, dropout, stopgrad, gumbel, weight,
-            frame0_mode, ce_pregrasp_only,
+            frame0_mode, ce_pregrasp_only, token_repeat,
         )
 
     VLAFlowMatching.__init__ = _patched_vlaf_init
@@ -263,9 +269,9 @@ def apply() -> None:
                 logging.info(
                     "[eval3_slot_bottleneck] v16 prefix check: %d images embedded, "
                     "n_img=%d n_cams=%d tok_per_cam=%d, slot reads token slice [%d:%d]; "
-                    "per-camera (shape,mean,std)=%s",
+                    "h_slot appended K=%d times; per-camera (shape,mean,std)=%s",
                     len(images), n_img, n_cams, tok_per_cam,
-                    tok_per_cam, 2 * tok_per_cam, cam_stats,
+                    tok_per_cam, 2 * tok_per_cam, token_repeat, cam_stats,
                 )
             except Exception as _e:
                 logging.warning("[eval3_slot_bottleneck] v16 prefix check failed: %s", _e)
@@ -275,12 +281,17 @@ def apply() -> None:
         # projects (slot_proj is action-trained); gumbel path is a ST pick.
         h_slot = self.slot_clf.make_token(logits, feat, self._slot_stopgrad)
         tok = h_slot.to(dtype=embs.dtype).unsqueeze(1)  # (B, 1, D)
+        K = token_repeat
+        if K > 1:
+            # K identical h_slot tokens. .repeat allocates K copies so gradient
+            # paths through slot_proj sum correctly across the K positions.
+            tok = tok.repeat(1, K, 1)  # (B, K, D)
         B = embs.shape[0]
-        one_pad = torch.ones(B, 1, dtype=pad_masks.dtype, device=pad_masks.device)
-        one_att = torch.ones(B, 1, dtype=att_masks.dtype, device=att_masks.device)
+        ones_pad = torch.ones(B, K, dtype=pad_masks.dtype, device=pad_masks.device)
+        ones_att = torch.ones(B, K, dtype=att_masks.dtype, device=att_masks.device)
         embs = torch.cat([embs, tok], dim=1)
-        pad_masks = torch.cat([pad_masks, one_pad], dim=1)
-        att_masks = torch.cat([att_masks, one_att], dim=1)
+        pad_masks = torch.cat([pad_masks, ones_pad], dim=1)
+        att_masks = torch.cat([att_masks, ones_att], dim=1)
         return embs, pad_masks, att_masks
 
     VLAFlowMatching.embed_prefix = _patched_embed_prefix

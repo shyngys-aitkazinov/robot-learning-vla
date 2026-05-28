@@ -2,18 +2,23 @@
 """Pre-filter Pins celebrity photos by quality + rank them best-first.
 
 For each celeb in an input pool JSON (Pins top-30 / top-50 / full),
-runs a Haar face detector on every photo and computes a quality score:
+runs a Haar face detector on every photo and computes a quality score
+where **face area and resolution are equal priorities** (each up to 100 pts),
+then multiplies the result by a color factor (0.5 for B&W → 1.0 for color):
 
-  score =   (face_area / image_area)      * 100      # bigger close-up = better
-          + (10 if single_face else 0)               # single face strongly preferred
-          + (5  if portrait_orientation else 0)      # h > w
-          + (5  if long_edge >= 600 else 0)          # decent resolution
-          + (10 if face_centered (within 30% from center horizontally) else 0)
+  raw = face_area_frac * 100                                      # up to 100 (big face)
+      + clamp((long_edge - 300) / (700 - 300), 0, 1) * 100        # up to 100 (sharp)
+      + (10 if portrait (h>=w) else 0)
+      + (10 if face_centered (within 30% from center horiz.) else 0)
+  color_factor = 0.5  if mean_saturation <= 30
+                 1.0  if mean_saturation >= 60
+                 linear interp otherwise
+  score = raw * color_factor
 
 Photos must pass ALL hard filters to be kept:
-  * exactly 1 face detected
-  * face_area >= 8% of image area (the face is clearly the subject)
-  * long_edge >= 400 px
+  * exactly 1 face detected (dominance >= 50% if multiple Haar boxes overlap)
+  * face_area >= 15% of image area  (so the face is unambiguously the subject)
+  * long_edge >= 300 px             (drops the worst ~half of the Pins pool)
   * portrait or near-square (h >= w * 0.85)
 
 Output JSON: same shape as the input pool JSON, but each celeb gets a
@@ -110,15 +115,57 @@ class PhotoScore:
     face_area_frac: float
     long_edge: int
     aspect_h_over_w: float
+    mean_saturation: float
+    color_factor: float
     keep: bool
     reason: str   # 'OK' or 'FAIL_<criterion>'
 
 
-HARD_FACE_AREA_MIN = 0.08      # face must occupy >= 8% of image
-HARD_LONG_EDGE_MIN = 180       # at least 180 px on long edge (Pins median ~155, this drops the worst tail)
+HARD_FACE_AREA_MIN = 0.15      # face must occupy >= 15% of image (was 0.08 — too generous)
+HARD_LONG_EDGE_MIN = 300       # at least 300 px on long edge (Pins median ~185; this drops the worst ~50%)
 HARD_ASPECT_H_OVER_W_MIN = 0.85  # portrait-or-near-square
 HARD_DOMINANT_FACE_FRAC = 0.5  # if multiple faces, largest must own >= 50% of total face area
                                 # (handles Haar's frequent double-detection on frontal+profile)
+
+# Scoring: face area and resolution are EQUAL priorities — each contributes up
+# to 100 points on a continuous scale. A tiny tightly-cropped face no longer
+# beats a high-res clean portrait.
+#
+# Resolution score: linear ramp from RES_SCORE_MIN_PX (=HARD_LONG_EDGE_MIN, =0)
+# to RES_SCORE_MAX_PX (=100). Anything above the max caps at 100.
+#
+# Face-area score: face_area_frac * 100, capped at 100 (frac >= 1.0 is impossible
+# but defensive). Saturation point at 50% face area would be nicer for portrait
+# aesthetics (no reward for ever-tighter crops), but the user explicitly wants
+# big face area rewarded — so the natural ramp stays.
+RES_SCORE_MIN_PX = HARD_LONG_EDGE_MIN
+RES_SCORE_MAX_PX = 700
+PORTRAIT_BONUS = 10  # h >= w
+CENTERED_BONUS = 10  # face_cx within 30% of image center
+
+# Color penalty: B&W / desaturated photos get a multiplicative score penalty.
+# Saturation is measured in HSV S channel (0..255 scale, OpenCV convention).
+# Empirically: pure B&W photos have mean S ≈ 10-15; clearly-colored portraits
+# are 70+. The ramp is soft so faded / muted-color shots aren't penalized as
+# hard as pure grayscale.
+SAT_BW_THRESHOLD = 30.0       # mean_saturation <= this → treat as B&W (0.5× score)
+SAT_FULL_COLOR_THRESHOLD = 60.0  # mean_saturation >= this → no penalty (1.0× score)
+BW_SCORE_FACTOR = 0.5         # multiplicative penalty floor for pure B&W
+
+
+def _compute_color_factor(mean_saturation: float) -> float:
+    """Return multiplicative score factor based on mean HSV saturation.
+
+    - mean_sat <= SAT_BW_THRESHOLD       → BW_SCORE_FACTOR (0.5 by default; "B&W")
+    - mean_sat >= SAT_FULL_COLOR_THRESHOLD → 1.0 (no penalty)
+    - in-between: linear ramp BW_SCORE_FACTOR..1.0
+    """
+    if mean_saturation <= SAT_BW_THRESHOLD:
+        return BW_SCORE_FACTOR
+    if mean_saturation >= SAT_FULL_COLOR_THRESHOLD:
+        return 1.0
+    span = SAT_FULL_COLOR_THRESHOLD - SAT_BW_THRESHOLD
+    return BW_SCORE_FACTOR + (1.0 - BW_SCORE_FACTOR) * (mean_saturation - SAT_BW_THRESHOLD) / span
 
 
 def _score_one_photo(args: tuple[str, str]) -> PhotoScore:
@@ -129,15 +176,22 @@ def _score_one_photo(args: tuple[str, str]) -> PhotoScore:
     img = cv2.imread(str(p))
     if img is None:
         return PhotoScore(path=str(p), score=-1.0, n_faces=0, face_area_frac=0.0,
-                          long_edge=0, aspect_h_over_w=0.0, keep=False, reason="FAIL_unreadable")
+                          long_edge=0, aspect_h_over_w=0.0,
+                          mean_saturation=0.0, color_factor=1.0,
+                          keep=False, reason="FAIL_unreadable")
     h, w = img.shape[:2]
     long_edge = max(h, w)
     aspect_hw = h / w
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # HSV S-channel mean (0..255) — drives the B&W penalty.
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    mean_saturation = float(hsv[:, :, 1].mean())
+    color_factor = _compute_color_factor(mean_saturation)
     boxes = _detect_faces(gray, frontal, profile)
     if len(boxes) == 0:
         return PhotoScore(path=str(p), score=-1.0, n_faces=0, face_area_frac=0.0,
                           long_edge=long_edge, aspect_h_over_w=aspect_hw,
+                          mean_saturation=mean_saturation, color_factor=color_factor,
                           keep=False, reason="FAIL_no_face")
     n_faces = len(boxes)
     # Largest face for area + centering checks
@@ -158,30 +212,44 @@ def _score_one_photo(args: tuple[str, str]) -> PhotoScore:
     if n_faces > 1 and dominance < HARD_DOMINANT_FACE_FRAC:
         return PhotoScore(path=str(p), score=-1.0, n_faces=n_faces, face_area_frac=face_area_frac,
                           long_edge=long_edge, aspect_h_over_w=aspect_hw,
+                          mean_saturation=mean_saturation, color_factor=color_factor,
                           keep=False, reason=f"FAIL_multi_face_{n_faces}")
     if face_area_frac < HARD_FACE_AREA_MIN:
         return PhotoScore(path=str(p), score=-1.0, n_faces=n_faces, face_area_frac=face_area_frac,
                           long_edge=long_edge, aspect_h_over_w=aspect_hw,
+                          mean_saturation=mean_saturation, color_factor=color_factor,
                           keep=False, reason="FAIL_face_too_small")
     if long_edge < HARD_LONG_EDGE_MIN:
         return PhotoScore(path=str(p), score=-1.0, n_faces=n_faces, face_area_frac=face_area_frac,
                           long_edge=long_edge, aspect_h_over_w=aspect_hw,
+                          mean_saturation=mean_saturation, color_factor=color_factor,
                           keep=False, reason="FAIL_low_res")
     if aspect_hw < HARD_ASPECT_H_OVER_W_MIN:
         return PhotoScore(path=str(p), score=-1.0, n_faces=n_faces, face_area_frac=face_area_frac,
                           long_edge=long_edge, aspect_h_over_w=aspect_hw,
+                          mean_saturation=mean_saturation, color_factor=color_factor,
                           keep=False, reason="FAIL_too_wide")
 
-    # Soft score (continuous, higher = better)
-    score = face_area_frac * 100.0
-    score += 10.0  # single-face bonus (already hard-required, just bake into score)
-    score += 5.0 if aspect_hw >= 1.0 else 0.0          # portrait > square
-    score += 5.0 if long_edge >= 600 else 0.0
-    score += 10.0 if centered else 0.0
+    # Soft score (continuous, higher = better).
+    #
+    # Equal-priority face area + resolution: each contributes up to 100 points.
+    # Portrait + centered are small bonuses (+10 each). The whole thing is then
+    # multiplied by color_factor: B&W photos get ~half score; clearly-colored
+    # photos are unchanged.
+    face_area_score = min(face_area_frac, 1.0) * 100.0
+    res_span = max(RES_SCORE_MAX_PX - RES_SCORE_MIN_PX, 1)
+    res_score = max(0.0, min(1.0, (long_edge - RES_SCORE_MIN_PX) / res_span)) * 100.0
+    portrait_bonus = PORTRAIT_BONUS if aspect_hw >= 1.0 else 0.0
+    centered_bonus = CENTERED_BONUS if centered else 0.0
+    raw_score = face_area_score + res_score + portrait_bonus + centered_bonus
+    score = raw_score * color_factor
 
     return PhotoScore(path=str(p), score=round(score, 2), n_faces=n_faces,
                       face_area_frac=round(face_area_frac, 4), long_edge=long_edge,
-                      aspect_h_over_w=round(aspect_hw, 3), keep=True, reason="OK")
+                      aspect_h_over_w=round(aspect_hw, 3),
+                      mean_saturation=round(mean_saturation, 1),
+                      color_factor=round(color_factor, 3),
+                      keep=True, reason="OK")
 
 
 # ---------------------------------------------------------------------------
@@ -297,6 +365,13 @@ def main() -> None:
         "min_face_area_frac": HARD_FACE_AREA_MIN,
         "min_long_edge_px": HARD_LONG_EDGE_MIN,
         "min_aspect_h_over_w": HARD_ASPECT_H_OVER_W_MIN,
+        "scoring": (
+            f"(face_area_frac*100 (cap 100) "
+            f"+ clamp((long_edge-{RES_SCORE_MIN_PX})/{RES_SCORE_MAX_PX - RES_SCORE_MIN_PX}, 0, 1)*100 "
+            f"+ {PORTRAIT_BONUS} if portrait + {CENTERED_BONUS} if centered) "
+            f"× color_factor (= {BW_SCORE_FACTOR} if mean_sat<={SAT_BW_THRESHOLD}, "
+            f"1.0 if mean_sat>={SAT_FULL_COLOR_THRESHOLD}, lerp otherwise)"
+        ),
     }
     out_meta["celebrities"] = new_celebs
     args.out_json.parent.mkdir(parents=True, exist_ok=True)

@@ -1026,6 +1026,145 @@ class PrintShuffleAugmenter:
         return (self.__class__, (self._other1_path, self._other2_path, self._p, self._seed))
 
 
+class CameraDropAugmenter:
+    """Replace ``observation.images.front`` (camera1) with Gaussian noise so the
+    action expert is forced to use language + ``observation.images.front_frame0``
+    (camera2) + proprio. Camera2 is NEVER touched -- caller must invoke this
+    AFTER the v16 frame-0 copy step so cam2 always carries a real frame.
+
+    Three modes combine, dominant first:
+
+      1. **Per-episode drop**. Deterministic flag from a stable 32-bit hash
+         of ``(seed, ep_idx, epoch_bucket)``. All samples from this episode in
+         this epoch agree across DataLoader workers and re-runs (no Python
+         hash randomization). The dominant robustness signal.
+      2. **Per-frame iid drop**. On non-dropped episodes, each ``__call__``
+         flips an independent Bernoulli at
+         ``frame_drop_p * (post_mult if not is_pregrasp else 1.0)``.
+      3. **Noise replacement**. ``clamp(N(noise_mean, noise_std^2), 0, 1)``,
+         same shape/dtype as the input.
+
+    Epoch bucket = ``curriculum_step // epoch_step_window``, read from the
+    shared ``get_curriculum_step_counter()``. When the counter is unavailable
+    (e.g. unit tests without the metrics pump), the bucket is ``0`` — the
+    per-episode flag is then stable for the whole run.
+
+    Picklable: stores only scalars; RNG state is lazy per-worker.
+    """
+
+    def __init__(
+        self,
+        episode_drop_p: float = 0.35,
+        frame_drop_p: float = 0.10,
+        post_mult: float = 3.0,
+        noise_mean: float = 0.5,
+        noise_std: float = 0.25,
+        epoch_step_window: int = 5000,
+        seed: int = 0,
+    ):
+        self._episode_drop_p = float(episode_drop_p)
+        self._frame_drop_p = float(frame_drop_p)
+        self._post_mult = float(post_mult)
+        self._noise_mean = float(noise_mean)
+        self._noise_std = float(noise_std)
+        self._epoch_step_window = max(1, int(epoch_step_window))
+        self._seed = int(seed)
+        # Lazy per-worker state (populated on first __call__ inside a worker).
+        # ``_rng_pid`` tracks which pid seeded the current RNGs so that DataLoader
+        # workers — which fork from the parent and inherit any RNG state already
+        # populated in the main process — re-seed once on first __call__ in the
+        # child. Without this, two workers would draw correlated coins until
+        # their streams diverged.
+        self._frame_rng: random.Random | None = None
+        self._noise_gen: torch.Generator | None = None
+        self._rng_pid: int = -1
+        self._counter = None  # curriculum counter handle, or False if unavailable
+
+    @staticmethod
+    def _stable_hash(seed: int, ep_idx: int, epoch_bucket: int) -> int:
+        """32-bit deterministic hash, uniform across processes.
+
+        Uses md5 over a tagged string. Avoids Python's randomized hash() and
+        the poor avalanche of 32-bit Knuth multiplicative for nearby inputs.
+        """
+        payload = f"cam1_drop:{int(seed)}:{int(ep_idx)}:{int(epoch_bucket)}".encode()
+        return int.from_bytes(hashlib.md5(payload).digest()[:4], "little")
+
+    def _ensure_rng(self) -> None:
+        pid = os.getpid()
+        # Re-seed whenever the pid changes (covers DataLoader-fork into a worker).
+        if self._frame_rng is None or self._rng_pid != pid:
+            self._frame_rng = random.Random(self._seed ^ (pid * 7919))
+            self._noise_gen = torch.Generator()
+            self._noise_gen.manual_seed(self._seed ^ (pid * 31337))
+            self._rng_pid = pid
+
+    def _epoch_bucket(self) -> int:
+        if self._counter is None:
+            try:
+                self._counter = get_curriculum_step_counter()
+            except Exception:
+                self._counter = False
+        if self._counter is False or self._counter is None:
+            return 0
+        try:
+            return int(self._counter.get_step()) // self._epoch_step_window
+        except Exception:
+            return 0
+
+    def episode_drop_flag(self, ep_idx: int, epoch_bucket: int | None = None) -> bool:
+        """Whether episode ``ep_idx`` is fully dropped in the (current or given) epoch.
+
+        Public so tests can predict the flag without invoking ``__call__``.
+        """
+        if self._episode_drop_p <= 0.0:
+            return False
+        b = self._epoch_bucket() if epoch_bucket is None else int(epoch_bucket)
+        h = self._stable_hash(self._seed, ep_idx, b)
+        return (h / 0xFFFFFFFF) < self._episode_drop_p
+
+    def __call__(
+        self,
+        img_chw: torch.Tensor,
+        *,
+        ep_idx: int,
+        is_pregrasp: bool,
+    ) -> torch.Tensor:
+        """img_chw: (3, H, W) float in [0, 1]. Returns same shape/dtype/range."""
+        self._ensure_rng()
+        if self.episode_drop_flag(int(ep_idx)):
+            drop = True
+        else:
+            p = self._frame_drop_p
+            if not is_pregrasp:
+                p *= self._post_mult
+            drop = self._frame_rng.random() < p
+        if not drop:
+            return img_chw
+        # Generate fresh noise tensor. Assignment in caller (row[key] = noise)
+        # means cam2's existing reference to the real frame is preserved.
+        shape = tuple(img_chw.shape)
+        noise = torch.randn(shape, generator=self._noise_gen, dtype=torch.float32)
+        noise.mul_(self._noise_std).add_(self._noise_mean).clamp_(0.0, 1.0)
+        if noise.dtype is not img_chw.dtype:
+            noise = noise.to(dtype=img_chw.dtype)
+        return noise
+
+    def __reduce__(self):
+        return (
+            self.__class__,
+            (
+                self._episode_drop_p,
+                self._frame_drop_p,
+                self._post_mult,
+                self._noise_mean,
+                self._noise_std,
+                self._epoch_step_window,
+                self._seed,
+            ),
+        )
+
+
 class Eval3PrepDataset(Dataset):
     """Proxy wrapping a LeRobotDataset with episode truncation + task aug.
 
@@ -1071,12 +1210,14 @@ class Eval3PrepDataset(Dataset):
         action_smooth_window: int = 0,
         action_smooth_gripper: bool = False,
         target_position_idx: int | None = None,
+        cam_drop_fn: "CameraDropAugmenter | None" = None,
     ):
         self._ds = dataset
         self._task_aug_fn = task_aug_fn
         self._bg_aug_fn = bg_aug_fn
         self._print_aug_fn = print_aug_fn
         self._state_aug_fn = state_aug_fn
+        self._cam_drop_fn = cam_drop_fn
         self._image_key = image_key
         # v16 slot-bottleneck caches (populated at the end of __init__ when
         # EVAL3_SLOT_FRAME0=1; stay empty otherwise and on prep-cache hits).
@@ -1444,11 +1585,39 @@ class Eval3PrepDataset(Dataset):
                 is_pre = 1 if (int(original_idx) - ep_start) <= grasp_off else 0
             row["is_pregrasp"] = torch.as_tensor(int(is_pre), dtype=torch.long)
             if is_pre and self._image_key in row:
-                row["observation.images.front_frame0"] = row[self._image_key]
+                cur = row[self._image_key]
+                # Cam2 invariant (defense-in-depth): when cam-drop is active,
+                # later code may replace row[image_key]. Cloning here decouples
+                # cam2 from any future mutation/assignment to cam1 — independent
+                # of the augmenter's implementation detail.
+                if self._cam_drop_fn is not None:
+                    cur = cur.clone()
+                row["observation.images.front_frame0"] = cur
             else:
                 f0img = self._frame0_by_ep.get(ep)
                 if f0img is not None:
                     row["observation.images.front_frame0"] = f0img
+            # Camera-1 dropout: run AFTER the front_frame0 assignment so cam2
+            # always carries a real frame even when cam1 is replaced by noise.
+            # Assignment (not in-place mutation) preserves cam2; the .clone()
+            # above makes the invariant local.
+            if self._cam_drop_fn is not None and self._image_key in row:
+                row[self._image_key] = self._cam_drop_fn(
+                    row[self._image_key], ep_idx=ep, is_pregrasp=bool(is_pre),
+                )
+            # Cam2 invariant (hard assertion): we are in v16 mode (frame-0
+            # cache populated OR grasp-offsets populated), so cam2 MUST be
+            # set. Missing key here means a cache miss or a regression that
+            # dropped the key — fail fast rather than letting the slot head
+            # silently read an empty pad.
+            cam2 = row.get("observation.images.front_frame0")
+            if not isinstance(cam2, torch.Tensor):
+                raise RuntimeError(
+                    "eval3_prep: cam2 (observation.images.front_frame0) "
+                    f"missing or invalid (type={type(cam2).__name__}) for "
+                    f"ep={ep} original_idx={original_idx} is_pregrasp={is_pre}; "
+                    "frame-0 cache may be incomplete."
+                )
         return row
 
     # ----- Catch-all proxy --------------------------------------------------

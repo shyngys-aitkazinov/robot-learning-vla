@@ -43,6 +43,17 @@
 #   EVAL3_SLOT_FRAME0=1  EVAL3_SLOT_CE_PREGRASP_ONLY=1  EVAL3_GRASP_GRIP_DELTA=20
 #   EVAL3_WANDB=1  EVAL3_WANDB_PROJECT=eval3-v16-real-data-slot
 #   EVAL3_DRY_RUN=0
+#
+# Camera-1 dropout (OPT-IN; default OFF — keeps existing v16 recipe unchanged).
+# When enabled the dataloader randomly replaces observation.images.front
+# (camera1) with Gaussian noise to force "lang + frame-0 -> trajectory" robustness.
+# observation.images.front_frame0 (camera2) is NEVER touched.
+#   EVAL3_CAM1_DROP=0                  # set to 1 to enable
+#   EVAL3_CAM1_DROP_EPISODE_P=0.35     # dominant: full-episode drop probability
+#   EVAL3_CAM1_DROP_FRAME_P=0.10       # per-frame iid prob (on non-dropped episodes)
+#   EVAL3_CAM1_DROP_POSTGRASP_MULT=3.0 # per-frame post-grasp multiplier
+#   EVAL3_CAM1_DROP_NOISE_MEAN=0.5  EVAL3_CAM1_DROP_NOISE_STD=0.25
+#   EVAL3_CAM1_DROP_EPOCH_WINDOW=5000  # steps per per-episode reroll
 
 set -euo pipefail
 

@@ -282,6 +282,17 @@ class WorkerArgs:
     hub_org: str
     overwrite: bool
     seed: int
+    # Source dataset family — defaults to v3 charuco _2 (the original Pins-pool
+    # training corpus). Override to point at a different ChArUco capture, e.g.
+    # source_prefix='dataset_v5_charuko_' + source_suffix='_full' for the v5
+    # cross-product captures.
+    source_prefix: str = "dataset_v3_charuco_"
+    source_suffix: str = "_2"
+    # Output dataset name template — ``{output_prefix}{output_suffix}_{celeb}_{pos}{output_postfix}``.
+    # Defaults reproduce the historical pins layout
+    # ``dataset_v3_synth_<suffix>_<celeb>_<pos>_2``.
+    output_prefix: str = "dataset_v3_synth_"
+    output_postfix: str = "_2"
 
 
 def generate_one_pins_dataset(args: WorkerArgs) -> dict:
@@ -293,7 +304,7 @@ def generate_one_pins_dataset(args: WorkerArgs) -> dict:
     target_celeb = args.target_celeb
     target_position = args.target_position
     task_str = canonical_task_for(target_celeb, pool)
-    out_name = f"dataset_v3_synth_{args.output_suffix}_{target_celeb}_{target_position}_2"
+    out_name = f"{args.output_prefix}{args.output_suffix}_{target_celeb}_{target_position}{args.output_postfix}"
     out_dir = Path(args.out_root) / out_name
 
     if out_dir.exists():
@@ -323,6 +334,7 @@ def generate_one_pins_dataset(args: WorkerArgs) -> dict:
     # ---- 2. Source episodes + joints -------------------------------------
     src_mp4, src_episodes, src_action, src_state = load_source_episodes(
         Path(args.source_root), target_position,
+        source_suffix=args.source_suffix, source_prefix=args.source_prefix,
     )
     print(f"[{out_name}] source: {src_mp4.name}  {len(src_episodes)} eps, "
           f"{len(src_action)} frames total", flush=True)
@@ -458,6 +470,10 @@ def _dry_run(
     distractors_per_target_photo: int,
     output_suffix: str,
     source_root: Path,
+    source_prefix: str = "dataset_v3_charuco_",
+    source_suffix: str = "_2",
+    output_prefix: str = "dataset_v3_synth_",
+    output_postfix: str = "_2",
 ) -> None:
     n_configs = max_photos_per_celeb * distractors_per_target_photo
     n_datasets = len(targets) * len(positions)
@@ -465,7 +481,7 @@ def _dry_run(
     source_avg_frames = 500  # measured average; refined below if sources exist
     src_avg_by_pos: dict[str, float] = {}
     for pos in positions:
-        src_ds = source_root / f"dataset_v3_charuco_{pos}_2"
+        src_ds = source_root / f"{source_prefix}{pos}{source_suffix}"
         if src_ds.is_dir():
             try:
                 info = json.loads((src_ds / "meta/info.json").read_text())
@@ -503,24 +519,27 @@ def _dry_run(
         print(f"  WARN: some targets have fewer photos than --max-photos-per-celeb={max_photos_per_celeb}")
     print()
     # Sample dataset names
+    name_tpl = f"{output_prefix}{{suf}}_{{c}}_{{p}}{output_postfix}"
     sample_names = [
-        f"dataset_v3_synth_{suffix if output_suffix else 'SUFFIX'}_{c}_{p}_2"
+        name_tpl.format(suf=suffix if output_suffix else "SUFFIX", c=c, p=p)
         for c in targets[:3] for p in positions
     ]
     if len(targets) > 3:
         sample_names.append("...")
-        sample_names.append(
-            f"dataset_v3_synth_{suffix if output_suffix else 'SUFFIX'}_{targets[-1]}_{positions[-1]}_2"
-        )
+        sample_names.append(name_tpl.format(
+            suf=suffix if output_suffix else "SUFFIX",
+            c=targets[-1], p=positions[-1],
+        ))
     print(f"  output dataset names:")
     for n in sample_names:
         print(f"    {n}")
     # Source check
     print()
     for pos in positions:
-        src_ds = source_root / f"dataset_v3_charuco_{pos}_2"
+        src_name = f"{source_prefix}{pos}{source_suffix}"
+        src_ds = source_root / src_name
         ok = "OK" if src_ds.is_dir() else "MISSING"
-        print(f"  source dataset_v3_charuco_{pos}_2: [{ok}]")
+        print(f"  source {src_name}: [{ok}]")
     print()
 
 
@@ -594,6 +613,23 @@ def main() -> None:
     ap.add_argument("--global-lift-offset", type=float, default=10.0)
     ap.add_argument("--global-lift-warmth", type=float, default=1.06)
 
+    # ChArUco source / output dataset name shape -----------------------------
+    ap.add_argument("--source-prefix", default="dataset_v3_charuco_",
+                    help="Prefix of the source dataset dir under --source-root. "
+                         "Default 'dataset_v3_charuco_'. Pass 'dataset_v5_charuko_' "
+                         "for the v5 cross-product captures (note the spelling).")
+    ap.add_argument("--source-suffix", default="_2",
+                    help="Suffix appended after the position in the source dir name. "
+                         "Default '_2' (v3 newer corpus); pass '_full' for the v5 "
+                         "cross-product captures.")
+    ap.add_argument("--output-prefix", default="dataset_v3_synth_",
+                    help="Prefix of generated dataset dir names. Default "
+                         "'dataset_v3_synth_'. Pass 'dataset_v5_synth_' to mark "
+                         "v5-derived outputs.")
+    ap.add_argument("--output-postfix", default="_2",
+                    help="Postfix appended after the position in the output dir name. "
+                         "Default '_2'; pass '_full' to match v5 source naming.")
+
     args = ap.parse_args()
 
     if not args.pool_json.is_file():
@@ -607,12 +643,14 @@ def main() -> None:
     if args.dry_run:
         _dry_run(pool, target_celebs, positions,
                  args.max_photos_per_celeb, args.distractors_per_target_photo,
-                 args.output_suffix, args.source_root)
+                 args.output_suffix, args.source_root,
+                 source_prefix=args.source_prefix, source_suffix=args.source_suffix,
+                 output_prefix=args.output_prefix, output_postfix=args.output_postfix)
         return
 
     # Validate sources before launching workers
     for pos in positions:
-        src_ds = args.source_root / f"dataset_v3_charuco_{pos}_2"
+        src_ds = args.source_root / f"{args.source_prefix}{pos}{args.source_suffix}"
         if not src_ds.is_dir():
             sys.exit(f"source dataset missing: {src_ds}")
 
@@ -647,6 +685,10 @@ def main() -> None:
             hub_org=args.hub_org,
             overwrite=args.overwrite,
             seed=args.seed,
+            source_prefix=args.source_prefix,
+            source_suffix=args.source_suffix,
+            output_prefix=args.output_prefix,
+            output_postfix=args.output_postfix,
         )
         for c in target_celebs for p in positions
     ]

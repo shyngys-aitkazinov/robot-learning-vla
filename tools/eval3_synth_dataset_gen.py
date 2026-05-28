@@ -241,7 +241,7 @@ class SourceEpisodeMeta:
     video_file: int
 
 
-def load_source_episodes(source_root: Path, position: str, source_suffix: str = "_2") -> tuple[Path, list[SourceEpisodeMeta], np.ndarray, np.ndarray]:
+def load_source_episodes(source_root: Path, position: str, source_suffix: str = "_2", source_prefix: str = "dataset_v3_charuco_") -> tuple[Path, list[SourceEpisodeMeta], np.ndarray, np.ndarray]:
     """Return (mp4_path, [SourceEpisodeMeta x N], action_array, state_array).
 
     Joint arrays are flat (concatenated across all source episodes); use the
@@ -250,8 +250,12 @@ def load_source_episodes(source_root: Path, position: str, source_suffix: str = 
     ``source_suffix`` (default ``_2``) selects which ChArUco recording variant
     to read from — e.g. ``_1`` for the older capture, ``_2`` for the newer one
     that the v3 synth corpus is built on.
+
+    ``source_prefix`` (default ``dataset_v3_charuco_``) selects the dataset
+    family. Pass ``dataset_v5_charuko_`` to read the v5 cross-product captures
+    (note the 'charuko' spelling — matches the on-disk + Hub naming).
     """
-    ds = source_root / f"dataset_v3_charuco_{position}{source_suffix}"
+    ds = source_root / f"{source_prefix}{position}{source_suffix}"
     if not ds.is_dir():
         sys.exit(f"source dataset missing: {ds}")
     # Episodes parquet — one per chunk (we know v3 ChArUco has chunk-000 only).
@@ -434,6 +438,9 @@ class WorkerArgs:
     # The pinned generator sets both to _1 to target the older captures.
     source_suffix: str = "_2"
     output_postfix: str = "_2"
+    # Source dataset prefix — default ``dataset_v3_charuco_``. Override to
+    # ``dataset_v5_charuko_`` to read the v5 cross-product captures.
+    source_prefix: str = "dataset_v3_charuco_"
     # Optional override for the config grid. When None (default), use the full
     # build_config_grid (5^3 * 2 = 250 for N=5, 2000 for N=10). When set, the
     # worker uses exactly this list of configs — the pinned generator passes
@@ -562,7 +569,8 @@ def generate_one_dataset(args: WorkerArgs) -> dict:
 
     # --- 2. Source episodes + joints ---------------------------------------
     src_mp4, src_episodes, src_action, src_state = load_source_episodes(
-        Path(args.source_root), target_position, source_suffix=args.source_suffix,
+        Path(args.source_root), target_position,
+        source_suffix=args.source_suffix, source_prefix=args.source_prefix,
     )
     print(f"[{out_name}] source: {src_mp4.name}  "
           f"{len(src_episodes)} episodes, {len(src_action)} frames total", flush=True)
@@ -765,7 +773,10 @@ def generate_one_balanced_dataset(args: WorkerArgs) -> dict:
     # Load all three ChArUco source datasets. Each gives (mp4, episodes, action, state).
     per_position: dict[str, tuple[Path, list[SourceEpisodeMeta], np.ndarray, np.ndarray]] = {}
     for pos in POSITIONS:
-        src = load_source_episodes(Path(args.source_root), pos)
+        src = load_source_episodes(
+            Path(args.source_root), pos,
+            source_suffix=args.source_suffix, source_prefix=args.source_prefix,
+        )
         per_position[pos] = src
         print(f"[{out_name}] source[{pos}]: {src[0].name}  "
               f"{len(src[1])} episodes, {len(src[2])} frames total", flush=True)

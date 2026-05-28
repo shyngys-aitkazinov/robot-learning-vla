@@ -283,6 +283,7 @@ def apply_concat_patch() -> None:
                 Eval3PrepDataset,
                 BackgroundReplaceAugmenter,
                 PrintShuffleAugmenter,
+                CameraDropAugmenter,
                 make_task_augmenter,
                 make_slot_task_augmenter,
                 make_state_augmenter,
@@ -343,6 +344,46 @@ def apply_concat_patch() -> None:
                     state_aug._mode_zero_weight,
                     "<provided>" if state_std is not None else "<raw-degrees fallback>",
                 )
+            # --- Camera-1 dropout augmenter (opt-in, default off) ----------
+            #   EVAL3_CAM1_DROP=0                  master switch
+            #   EVAL3_CAM1_DROP_EPISODE_P=0.35     full-episode drop prob (DOMINANT)
+            #   EVAL3_CAM1_DROP_FRAME_P=0.10       per-frame iid drop prob (pre-grasp)
+            #   EVAL3_CAM1_DROP_POSTGRASP_MULT=3.0 per-frame multiplier post-grasp
+            #   EVAL3_CAM1_DROP_NOISE_MEAN=0.5
+            #   EVAL3_CAM1_DROP_NOISE_STD=0.25
+            #   EVAL3_CAM1_DROP_EPOCH_WINDOW=5000  steps per per-episode reroll
+            cam_drop_fn = None
+            if os.environ.get("EVAL3_CAM1_DROP", "0") == "1":
+                def _ef(name, default):
+                    try:
+                        return float(os.environ.get(name, str(default)))
+                    except ValueError:
+                        return float(default)
+
+                def _ei(name, default):
+                    try:
+                        return int(os.environ.get(name, str(default)))
+                    except ValueError:
+                        return int(default)
+
+                cam_drop_fn = CameraDropAugmenter(
+                    episode_drop_p=_ef("EVAL3_CAM1_DROP_EPISODE_P", 0.35),
+                    frame_drop_p=_ef("EVAL3_CAM1_DROP_FRAME_P", 0.10),
+                    post_mult=_ef("EVAL3_CAM1_DROP_POSTGRASP_MULT", 3.0),
+                    noise_mean=_ef("EVAL3_CAM1_DROP_NOISE_MEAN", 0.5),
+                    noise_std=_ef("EVAL3_CAM1_DROP_NOISE_STD", 0.25),
+                    epoch_step_window=_ei("EVAL3_CAM1_DROP_EPOCH_WINDOW", 5000),
+                    seed=(hash("cam1_drop") & 0xFFFF),
+                )
+                logging.info(
+                    "eval3_concat_patch: camera-1 drop enabled — "
+                    "ep_p=%.3f frame_p=%.3f post_mult=%.1f noise=N(%.2f,%.2f) "
+                    "epoch_window=%d",
+                    cam_drop_fn._episode_drop_p, cam_drop_fn._frame_drop_p,
+                    cam_drop_fn._post_mult, cam_drop_fn._noise_mean,
+                    cam_drop_fn._noise_std, cam_drop_fn._epoch_step_window,
+                )
+
             bg_replace_enabled = os.environ.get("EVAL3_BG_REPLACE", "1") == "1"
             print_shuffle_enabled = os.environ.get("EVAL3_PRINT_SHUFFLE", "1") == "1"
             try:
@@ -625,13 +666,14 @@ def apply_concat_patch() -> None:
                     action_smooth_window=action_smooth_window,
                     action_smooth_gripper=action_smooth_gripper,
                     target_position_idx=_aux_pos_idx,
+                    cam_drop_fn=cam_drop_fn,
                 )
                 s = w.truncation_summary()
                 logging.info(
                     "eval3_concat_patch: %s  frames=%d/%d (%.1f%%)  episodes=%d/%d  "
                     "trunc_place=%s mode=%s (match=%.0f%%, avg_kept=%.0f)  "
                     "grip_repair=%s(changed=%d) smooth_w=%d(changed=%d) "
-                    "task_aug=%s slot=%s  bg_aug=%s  print_aug=%s  ep_filter=%s",
+                    "task_aug=%s slot=%s  bg_aug=%s  print_aug=%s  cam_drop=%s  ep_filter=%s",
                     s["repo_id"], s["kept_num_frames"], s["original_num_frames"],
                     s["kept_fraction"] * 100.0, s["kept_num_episodes"],
                     s["original_num_episodes"],
@@ -641,7 +683,7 @@ def apply_concat_patch() -> None:
                     s["gripper_repair_enabled"], s["gripper_repair_changed_frames"],
                     s["action_smooth_window"], s["action_smooth_changed_frames"],
                     ds_task_aug is not None, slot or "none", bg_aug is not None,
-                    print_aug is not None, ep_filter,
+                    print_aug is not None, cam_drop_fn is not None, ep_filter,
                 )
                 prep_datasets.append(w)
             datasets = prep_datasets
