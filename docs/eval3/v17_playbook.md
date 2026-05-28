@@ -328,6 +328,75 @@ per-celeb sampling); pins30q5 exposes 5 photos per face × few distractors
 unique faces with mixed exposure densities and ~190 new (celeb, position)
 tuples on top of the v4 / v3 synth base.
 
+### 3.7 Held-out eval slate (`dataset_v5_synth_holdout_*_full`)
+
+A small held-out eval set drawn from the **same two pools as §3.5 + §3.6** but
+under a distinct output prefix so the training globs do **not** pick it up:
+
+- algvr glob: `dataset_v5_synth_algvr_*_full` → 102 datasets, training only
+- pins30q5 glob: `dataset_v5_synth_pins30q5_*_full` → 90 datasets, training only
+- holdout glob: `dataset_v5_synth_holdout_*_full` → 10 datasets, **eval only**
+
+Two layers of held-out-ness:
+1. **Different output prefix** (`holdout`) — no training glob matches it.
+2. **Different distractor seed** (`4242` vs training's `42`) — even where a celeb appears in both training and eval (e.g. via the algvr or pins30q5 pool), the distractor scenes drawn for it are different.
+
+Identity coverage at default scale (5 + 5 = 10 datasets):
+
+| Pool | Celebs (random, seed=42/celebs) | Position (balanced 2L/2M/1R per pool) |
+|---|---|---|
+| algvr | Andrea Vedaldi, Aude Billard, Georgia Chalvatzaki, Javier Romero, Shuran Song | middle, left, right, left, middle |
+| pins30q5 | Hugh Jackman, Leonardo DiCaprio, Rihanna, Robert Downey Jr, Tom Cruise | middle, right, middle, left, left |
+
+Each dataset has **4 episodes / ~2k frames / ~10 MB** (N=2 target photos × M=2 distractor scenes per target photo). Total ~20k frames / ~100 MB — small enough that the val watcher's default 3 eps × 30 frames per repo cleanly samples it.
+
+**Build / rebuild:**
+
+```bash
+# Default: 5 + 5 datasets, ~7 min total, no parallelism (small enough)
+python tools/eval3_build_holdout_eval_set.py
+
+# Smaller / larger sample size
+python tools/eval3_build_holdout_eval_set.py --n-per-pool 3
+python tools/eval3_build_holdout_eval_set.py --n-per-pool 10 --n-target-photos 1 --distractors-per-target-photo 3
+
+# Pick a different celeb sample (changes selection seed but keeps distractor seed)
+python tools/eval3_build_holdout_eval_set.py --selection-seed 7
+
+# Re-roll distractors only (keeps the same 10 celebs + positions, changes scenes)
+python tools/eval3_build_holdout_eval_set.py --distractor-seed 9999 --overwrite
+
+# Dry-run: print plan, no IO
+python tools/eval3_build_holdout_eval_set.py --dry-run
+```
+
+**Wire into the val watcher** — the build script prints a ready-to-paste env-var snippet on success:
+
+```bash
+# (paste the EVAL3_VAL_REPOS / EVAL3_VAL_LOCAL_REPOS lines the build script
+#  emitted; both are needed so the watcher knows to load from ./datasets/
+#  instead of the Hub)
+EVAL3_VAL_WATCH=1 \
+EVAL3_VAL_REPOS=RobotLearningVLA/dataset_v5_synth_holdout_algvr_andrea_vedaldi_middle_full,...,RobotLearningVLA/dataset_v5_synth_holdout_pins30q5_tom_cruise_left_full \
+EVAL3_VAL_LOCAL_REPOS=RobotLearningVLA/dataset_v5_synth_holdout_algvr_andrea_vedaldi_middle_full,...,RobotLearningVLA/dataset_v5_synth_holdout_pins30q5_tom_cruise_left_full \
+EVAL3_VAL_DEVICE=mps \
+./scripts/run_eval3_smolvla_v17_real_data_slot_train.sh
+```
+
+**Notes on the four val watcher metrics with this slate** (see §4.1):
+
+- `slot_acc` — works out of the box; auto-derived from `_<pos>_full` suffix.
+- `action_mae` / `action_mae_per_joint` — always works.
+- `cross_prompt_delta` — always works.
+- `prompt_nearest_accuracy` — needs `EVAL3_VAL_PROMPTS` JSON to map the new celebrity slugs (`andrea_vedaldi`, `hugh_jackman`, …) to their canonical "Place the coke on …" prompts, since the watcher's built-in mapping only covers Swift / LeCun / Obama. Until then this metric will report `null` per row for unknown identities — the other three still compute. Example:
+
+```bash
+EVAL3_VAL_PROMPTS='{"andrea_vedaldi":"Place the coke on Andrea Vedaldi",
+                    "aude_billard":"Place the coke on Aude Billard",
+                    "leonardo_dicaprio":"Place the coke on Leonardo DiCaprio",
+                    ...}'
+```
+
 ## 4. Monitoring
 
 ### One-time startup diagnostics (must appear in first ~100 log lines)
@@ -868,6 +937,7 @@ python tools/eval3_val_watcher.py \
 - `docs/eval3/v16_playbook.md` — companion playbook for the v16 slot bottleneck (architectural prerequisite)
 - `scripts/run_eval3_synth_algvr_dataset_gen.sh` — builds the algvr-conference synth slate consumed by `EVAL3_V17_INCLUDE_ALGVR=1` (see §3.5)
 - `scripts/run_eval3_synth_pins30q5_dataset_gen.sh` — builds the PINS top-30-quality synth slate consumed by `EVAL3_V17_INCLUDE_PINS30Q5=1` (see §3.6); same wrapper structure as the algvr generator
+- `tools/eval3_build_holdout_eval_set.py` — builds the small `dataset_v5_synth_holdout_*_full` eval slate (5 algvr + 5 pins30q5 celebs, 1 random position each, ~10 MB / dataset) for the §4.1 val watcher. Output prefix is distinct from both training globs so it's never accidentally pulled into training (see §3.7).
 - `tools/eval3_synth_pins_dataset_gen.py` — Pins-pool generator the algvr / pins30q5 launchers wrap (accepts `--source-prefix` / `--source-suffix` / `--output-prefix` / `--output-postfix` so it can target v5 charuko sources)
 - `scripts/run_eval3_synth_pins_dataset_gen.sh` — legacy env-var wrapper around the same generator with v3 charuco defaults; **not** wired into v17, kept for backward compatibility with the older `pins10eval_*` Hub family
 - `tools/pins_quality_filter.py` — Haar-based scorer that produces the quality-ranked, B&W-penalised pool JSON (§3.6)

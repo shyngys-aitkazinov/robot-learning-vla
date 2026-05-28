@@ -43,6 +43,7 @@ import gc
 import json
 import logging
 import os
+import random
 import sys
 import time
 from collections import defaultdict
@@ -203,7 +204,16 @@ def slot_from_repo(repo_id: str) -> str | None:
     return None
 
 
-def identity_from_repo(repo_id: str) -> str | None:
+def identity_from_repo(repo_id: str, known_idents: set[str] | None = None) -> str | None:
+    """Derive an identity slug from a repo name.
+
+    First checks the 3 hardcoded TOY identities (Swift / LeCun / Obama). Then,
+    if ``known_idents`` is supplied (typically the keys of
+    ``EVAL3_VAL_PROMPTS``), tries matching each one as a substring of the
+    repo basename. This lets the prompt JSON drive identity recognition for
+    held-out celebrities (e.g. ``andrea_vedaldi``, ``hugh_jackman``, …)
+    without code edits to this regex table.
+    """
     rl = repo_id.lower()
     if "taylor_swift" in rl or "_taylor_" in rl:
         return "swift"
@@ -211,6 +221,12 @@ def identity_from_repo(repo_id: str) -> str | None:
         return "lecun"
     if "barack_obama" in rl or "_barack_" in rl:
         return "obama"
+    if known_idents:
+        # Try the prompt-dict slugs as substrings, longest first so a more
+        # specific slug wins over a shorter prefix.
+        for slug in sorted(known_idents, key=len, reverse=True):
+            if slug and slug.lower() in rl:
+                return slug
     return None
 
 
@@ -260,14 +276,22 @@ def is_v17_ckpt(rename_map: dict[str, str]) -> bool:
     return any("_frame0" in k for k in rename_map.keys())
 
 
-def load_bundle(policy_path: str, device: str, meta_repo_id: str, rename_map: dict[str, str]):
+def load_bundle(policy_path: str, device: str, meta_repo_id: str, rename_map: dict[str, str],
+                meta_local_root: str | None = None):
     """Return (cfg, policy, preprocessor, postprocessor, torch_device).
 
     Mirrors scripts/eval3_smolvla_checkpoint_sweep.py:_load_policy_bundle but
     fetches dataset stats from the first val repo so normalization matches the
     eval distribution.
+
+    ``meta_local_root`` lets the caller pin stats loading to a local on-disk
+    copy (parallel to how ``LeRobotDataset(root=...)`` is used in this file);
+    when omitted, ``LeRobotDatasetMetadata`` will fall back to the Hub.
     """
-    ds_meta = LeRobotDatasetMetadata(meta_repo_id)
+    if meta_local_root is not None:
+        ds_meta = LeRobotDatasetMetadata(meta_repo_id, root=meta_local_root)
+    else:
+        ds_meta = LeRobotDatasetMetadata(meta_repo_id)
     cfg = PreTrainedConfig.from_pretrained(str(policy_path))
     cfg.device = device
     cfg.pretrained_path = str(policy_path)
@@ -422,17 +446,42 @@ def eval_checkpoint(ckpt: str, cfg: Cfg) -> dict[str, Any]:
             f"All val repos failed to load: {failed_repos}"
         )
     stats_repo = next(iter(datasets))
-    bundle = load_bundle(ckpt, cfg.device, stats_repo, rename_map)
+    stats_local_root = local_root_for(stats_repo, cfg.val_local_repos)
+    bundle = load_bundle(ckpt, cfg.device, stats_repo, rename_map,
+                         meta_local_root=stats_local_root)
 
     per_repo_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
     t_start = time.time()
 
+    # Per-repo distractor sampling: when cfg.prompts has more than 3 entries
+    # (e.g. EVAL3_VAL_PROMPTS supplies the whole holdout celebrity pool), we
+    # still only run 3 inferences per frame — the correct identity's prompt
+    # + 2 distractors chosen deterministically per (repo, identity). This
+    # keeps wall time O(3 inferences × N frames) instead of O(|prompts| × N).
+
     for repo, ds in datasets.items():
         slot_label = slot_from_repo(repo)
-        ident_label = identity_from_repo(repo)
+        ident_label = identity_from_repo(repo, known_idents=set(cfg.prompts.keys()))
         target_idx = SLOT_TO_IDX.get(slot_label) if slot_label else None
         if target_idx is None:
             logging.warning("repo %s: cannot derive slot from name; slot_acc will be NaN", repo)
+
+        # Build the 3-prompt subset for this repo: correct identity + 2 random
+        # distractors from cfg.prompts. If cfg.prompts has ≤3 entries, use all.
+        prompts_for_repo: dict[str, str]
+        if len(cfg.prompts) <= 3:
+            prompts_for_repo = dict(cfg.prompts)
+        else:
+            others = [s for s in cfg.prompts if s != ident_label]
+            # Deterministic per (repo, identity) — same seed -> same distractors.
+            rng = random.Random(f"{cfg.seed}/{repo}/{ident_label}")
+            distractors = rng.sample(others, min(2, len(others)))
+            prompts_for_repo = {}
+            if ident_label and ident_label in cfg.prompts:
+                prompts_for_repo[ident_label] = cfg.prompts[ident_label]
+            for d in distractors:
+                prompts_for_repo[d] = cfg.prompts[d]
+
         # Cache frame-0 per episode if v17
         frame0_cache: dict[int, np.ndarray] = {}
         samples = sample_frames(ds, cfg.episodes_per_repo, cfg.frames_per_episode, cfg.seed)
@@ -454,7 +503,7 @@ def eval_checkpoint(ckpt: str, cfg: Cfg) -> dict[str, Any]:
             # Predict under three prompts; the correct one drives slot_acc.
             preds: dict[str, np.ndarray] = {}
             correct_logits: np.ndarray | None = None
-            for slug, prompt in cfg.prompts.items():
+            for slug, prompt in prompts_for_repo.items():
                 preds[slug] = predict_action_chunk(obs, task=prompt, bundle=bundle)
                 if slug == ident_label:
                     correct_logits = slot_logits_for(bundle)
