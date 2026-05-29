@@ -26,7 +26,9 @@ for arg in "$@"; do
 done
 
 # ---- Gate: pins30q5 readiness ---------------------------------------------
-need_dirs=90
+# Override if some pins30q5 datasets had to be dropped (e.g. video/parquet
+# frame-count mismatch detected by audit). Default 90 = full slate.
+need_dirs="${V17_PINS30Q5_NEED_DIRS:-90}"
 while true; do
   cur=$(ls -d "$ROOT"/datasets/dataset_v5_synth_pins30q5_*_full 2>/dev/null | wc -l)
   echo "pins30q5 dirs ready: $cur / $need_dirs"

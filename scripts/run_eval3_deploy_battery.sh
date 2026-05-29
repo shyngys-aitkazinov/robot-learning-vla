@@ -48,6 +48,16 @@
 #                       The v16 case arm sets rename_map {front->camera1,
 #                       front_frame0->camera2} + policy.empty_cameras=1.
 #
+# 2026-05-29 — v17 v4-anchored bigzoo (v16 slot bottleneck + camera-1 dropout),
+# TWO real cameras, default mode: raw:
+#   v17               : eval3-smolvla-v17-bigzoo-step3k (v17 mid-training snapshot;
+#                       same artifact layout as v16, same rename_map + empty_cameras=1).
+#                       POLICY_PATH defaults to that Hub repo; override with
+#                       EVAL3_V17_CKPT=<path-or-hf-repo> for other v17 checkpoints
+#                       (e.g. ./outputs/v17/checkpoints/004000/pretrained_model
+#                       for a local mid-run snapshot). Cam-drop is training-only;
+#                       at inference camera1 is always the live capture.
+#
 # 2026-05-20 additions — pinned ID+OOD aux-head runs, default mode: raw:
 #   Fine-tuned (5k run, warm-started from v6-synth step15k, aux loss weight 0.5):
 #     v6_idood_aux_warm_500  : eval3-smolvla-3way-5k-b128-v6-pinned-idood-aux-warm15k-step500
@@ -326,6 +336,21 @@ case "$CHECKPOINT_NAME" in
   # train_config.json, so this is belt-and-suspenders.
   v16)
     POLICY_PATH="${EVAL3_V16_CKPT:-RobotLearningVLA/eval3-smolvla-v16-pinsv5-step5k}"
+    DATASET_REPO_ID="RobotLearningVLA/dataset_v4_taylor_left"
+    DEFAULT_MODE="raw"
+    EXTRA_ARGS+=(
+      --rename_map='{"observation.images.front":"observation.images.camera1","observation.images.front_frame0":"observation.images.camera2"}'
+      --policy.empty_cameras=1
+    )
+    ;;
+
+  # --- 2026-05-29: v17 v4-anchored "bigzoo" mid-training snapshot ---
+  # v17 is architecturally identical to v16 at inference (slot bottleneck +
+  # frame-0 cam2 + camera-1 noise during training only). Same 2-camera
+  # rename_map + policy.empty_cameras=1. eval3_vla_deploy.py also auto-detects
+  # the rename_map from train_config.json.
+  v17)
+    POLICY_PATH="${EVAL3_V17_CKPT:-RobotLearningVLA/eval3-smolvla-v17-bigzoo-step3k}"
     DATASET_REPO_ID="RobotLearningVLA/dataset_v4_taylor_left"
     DEFAULT_MODE="raw"
     EXTRA_ARGS+=(
